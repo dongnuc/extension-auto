@@ -5,6 +5,7 @@ import { runtimeMessageTypes, type YoutubeTranscriptPageData } from '../../share
 
 interface SheetImportFormState {
   sheetUrl: string;
+  sheetName: string;
   startRow: string;
   endRow: string;
   titleColumn: string;
@@ -59,6 +60,7 @@ export interface SheetTitleTranslationResult {
 
 const DEFAULT_SHEET_IMPORT_FORM: SheetImportFormState = {
   sheetUrl: '',
+  sheetName: '',
   startRow: '3',
   endRow: '11',
   titleColumn: 'A',
@@ -87,6 +89,7 @@ function normalizeColumn(input: string): string {
 function normalizeForm(value: Partial<SheetImportFormState> | null | undefined): SheetImportFormState {
   return {
     sheetUrl: typeof value?.sheetUrl === 'string' ? value.sheetUrl : DEFAULT_SHEET_IMPORT_FORM.sheetUrl,
+    sheetName: typeof value?.sheetName === 'string' ? value.sheetName : DEFAULT_SHEET_IMPORT_FORM.sheetName,
     startRow: typeof value?.startRow === 'string' ? value.startRow : DEFAULT_SHEET_IMPORT_FORM.startRow,
     endRow: typeof value?.endRow === 'string' ? value.endRow : DEFAULT_SHEET_IMPORT_FORM.endRow,
     titleColumn: typeof value?.titleColumn === 'string' ? value.titleColumn : DEFAULT_SHEET_IMPORT_FORM.titleColumn,
@@ -130,10 +133,13 @@ function normalizeSheetUrlToEdit(urlOrId: string | null | undefined): string | u
 
 async function callAppsScript(url: string, payload: Record<string, unknown>): Promise<AppsScriptResponse> {
   const payloadWithSheet = { ...payload };
-  if (!payloadWithSheet.sheetUrl && ['read_rows', 'update_row'].includes(String(payloadWithSheet.action ?? ''))) {
+  if (['read_rows', 'update_row'].includes(String(payloadWithSheet.action ?? ''))) {
     const config = await loadWritebackConfig();
-    if (config.sheetUrl.trim()) {
+    if (!payloadWithSheet.sheetUrl && config.sheetUrl.trim()) {
       payloadWithSheet.sheetUrl = config.sheetUrl.trim();
+    }
+    if (!payloadWithSheet.sheetName && config.sheetName.trim()) {
+      payloadWithSheet.sheetName = config.sheetName.trim();
     }
   }
 
@@ -240,6 +246,7 @@ async function resolveTargetRow(job: RunJob, config: SheetImportFormState): Prom
         endRow,
         columns: [searchColumn],
         sheetUrl: job.source?.sheetUrl || config.sheetUrl,
+        sheetName: job.source?.sheetName || config.sheetName,
       });
 
       const matches = (readResponse.data ?? [])
@@ -275,6 +282,7 @@ async function resolveTargetRow(job: RunJob, config: SheetImportFormState): Prom
     endRow,
     columns: [videoTitleColumn],
     sheetUrl: job.source?.sheetUrl || config.sheetUrl,
+    sheetName: job.source?.sheetName || config.sheetName,
   });
 
   const normalizedVideoTitle = videoTitle.toLowerCase();
@@ -535,6 +543,7 @@ export async function writeJobOutputToGoogleSheet(job: RunJob): Promise<SheetWri
       },
       expectedEmptyColumns: [resolved.outputColumn],
       sheetUrl: job.source?.sheetUrl || config.sheetUrl,
+      sheetName: job.source?.sheetName || config.sheetName,
     });
 
     return {

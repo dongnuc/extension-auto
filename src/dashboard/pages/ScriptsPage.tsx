@@ -86,7 +86,10 @@ export function ScriptsPage() {
             </select>
           </div>
           <div style={{ color: '#9fb1cd', fontSize: 13 }}>
-            Thêm/sửa/xóa Google Sheet link, Apps Script Web App URL và API key ở tab Google Sheets. Component Scripts chỉ chọn config để chạy logic bên dưới.
+            Thêm/sửa/xóa Google Sheet link, Sheet name, Apps Script Web App URL và API key ở tab Google Sheets. Component Scripts chỉ chọn config để chạy logic bên dưới.
+          </div>
+          <div style={{ color: '#bfd0ea', fontSize: 13 }}>
+            Sheet name đang dùng: <strong>{sheetImportForm.sheetName || 'Default first sheet'}</strong>
           </div>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, minmax(110px, 160px))', gap: 12, alignItems: 'end' }}>
@@ -96,7 +99,7 @@ export function ScriptsPage() {
           </div>
           <div className="field">
             <label htmlFor="sheet-content-column">Content column</label>
-            <input id="sheet-content-column" value={sheetImportForm.contentColumn} onChange={(event) => updateSheetImportForm({ contentColumn: event.target.value })} placeholder="H" />
+            <input id="sheet-content-column" value={sheetImportForm.contentColumn} onChange={(event) => updateSheetImportForm({ contentColumn: event.target.value })} placeholder="C" />
           </div>
           <div className="field">
             <label htmlFor="sheet-video-title-column">Video title column</label>
@@ -159,7 +162,7 @@ export function ScriptsPage() {
             className="button"
             type="button"
             disabled={importingSheet || !sheetImportForm.sheetUrl.trim() || !sheetImportForm.startRow || !sheetImportForm.endRow || !sheetImportForm.titleColumn.trim() || !sheetImportForm.contentColumn.trim() || !sheetImportForm.videoTitleColumn.trim() || !sheetImportForm.outputColumn.trim()}
-            onClick={() => void importFromGoogleSheet(sheetImportForm.sheetUrl, Number(sheetImportForm.startRow), Number(sheetImportForm.endRow), sheetImportForm.titleColumn, sheetImportForm.contentColumn, sheetImportForm.videoTitleColumn, sheetImportForm.outputColumn)}
+            onClick={() => void importFromGoogleSheet(sheetImportForm.sheetUrl, sheetImportForm.sheetName, Number(sheetImportForm.startRow), Number(sheetImportForm.endRow), sheetImportForm.titleColumn, sheetImportForm.contentColumn, sheetImportForm.videoTitleColumn, sheetImportForm.outputColumn)}
           >
             {importingSheet ? 'Importing...' : 'Import Sheet'}
           </button>

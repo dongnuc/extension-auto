@@ -6,7 +6,11 @@ import { STORAGE_KEYS } from '../keys';
 
 export class GoogleSheetConfigRepository {
   async getAll(): Promise<GoogleSheetConfig[]> {
-    return chromeStorageArea.getItem<GoogleSheetConfig[]>(STORAGE_KEYS.sheetConfigs, []);
+    const configs = await chromeStorageArea.getItem<Array<GoogleSheetConfig & { sheetName?: string }>>(STORAGE_KEYS.sheetConfigs, []);
+    return configs.map((config) => ({
+      ...config,
+      sheetName: config.sheetName ?? '',
+    }));
   }
 
   async getSelectedId(): Promise<string> {
@@ -44,6 +48,7 @@ export class GoogleSheetConfigRepository {
       id: createId('sheet'),
       name: `Sheet ${configs.length + 1}`,
       sheetUrl: '',
+      sheetName: '',
       appScriptUrl: '',
       appScriptToken: '',
       updatedAt: nowIso(),

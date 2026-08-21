@@ -1,6 +1,7 @@
 export interface ScriptSourceMetadata {
   spreadsheetId: string;
   sheetUrl: string;
+  sheetName?: string;
   sourceRowNumber: number;
   titleColumn: string;
   contentColumn: string;

@@ -6,6 +6,7 @@ const EMPTY_CONFIG: GoogleSheetConfig = {
   id: '',
   name: '',
   sheetUrl: '',
+  sheetName: '',
   appScriptUrl: '',
   appScriptToken: '',
   updatedAt: '',
@@ -65,6 +66,7 @@ export function GoogleSheetsPage() {
       ...draft,
       name: draft.name.trim(),
       sheetUrl: draft.sheetUrl.trim(),
+      sheetName: draft.sheetName.trim(),
       appScriptUrl: draft.appScriptUrl.trim(),
       appScriptToken: draft.appScriptToken.trim(),
     });
@@ -119,6 +121,9 @@ export function GoogleSheetsPage() {
               <div style={{ color: '#9fb1cd', fontSize: 12, marginTop: 8, wordBreak: 'break-all' }}>
                 Sheet: {config.sheetUrl || 'No Google Sheet link'}
               </div>
+              <div style={{ color: '#9fb1cd', fontSize: 12, marginTop: 6 }}>
+                Sheet name: {config.sheetName || 'Default first sheet'}
+              </div>
               <div style={{ color: '#6f86aa', fontSize: 12, marginTop: 6, wordBreak: 'break-all' }}>
                 Apps Script: {config.appScriptUrl || 'No Web App URL'}
               </div>
@@ -140,6 +145,10 @@ export function GoogleSheetsPage() {
           <div className="field">
             <label htmlFor="sheet-config-detail-url">Google Sheet link</label>
             <input id="sheet-config-detail-url" value={draft.sheetUrl} onChange={(event) => setDraft((current) => ({ ...current, sheetUrl: event.target.value }))} placeholder="https://docs.google.com/spreadsheets/d/..." />
+          </div>
+          <div className="field">
+            <label htmlFor="sheet-config-detail-name-tab">Sheet name / tab name</label>
+            <input id="sheet-config-detail-name-tab" value={draft.sheetName} onChange={(event) => setDraft((current) => ({ ...current, sheetName: event.target.value }))} placeholder="VD: Tháng 8, Sheet1, Mùa Mưa" />
           </div>
           <div className="field">
             <label htmlFor="sheet-config-detail-app-script">Apps Script Web App URL</label>

@@ -11,8 +11,25 @@ import { extractYoutubeScriptsFromSheet, translateSheetVideoTitlesToVietnamese }
 
 const AUTOSAVE_DELAY_MS = 600;
 
+interface AppsScriptCellResult {
+  displayValue?: string;
+}
+
+interface AppsScriptRowResult {
+  row: number;
+  cells: Record<string, AppsScriptCellResult | undefined>;
+}
+
+interface AppsScriptResponse {
+  success: boolean;
+  error?: string;
+  message?: string;
+  data?: AppsScriptRowResult[];
+}
+
 export interface SheetImportFormState {
   sheetUrl: string;
+  sheetName: string;
   startRow: string;
   endRow: string;
   titleColumn: string;
@@ -31,10 +48,11 @@ export interface SheetImportFormState {
 }
 const DEFAULT_SHEET_IMPORT_FORM: SheetImportFormState = {
   sheetUrl: '',
+  sheetName: '',
   startRow: '3',
   endRow: '11',
   titleColumn: 'A',
-  contentColumn: 'H',
+  contentColumn: 'C',
   videoTitleColumn: 'E',
   outputColumn: 'I',
   translationSourceColumn: 'E',
@@ -120,6 +138,85 @@ function extractSpreadsheetId(sheetUrl: string): string | null {
   return match?.[1] ?? null;
 }
 
+function extractSheetGid(sheetUrl: string): string | null {
+  const match = sheetUrl.match(/[?#&]gid=([0-9]+)/);
+  return match?.[1] ?? null;
+}
+
+async function resolveSheetGid(spreadsheetId: string, sheetName: string): Promise<string | null> {
+  const normalizedSheetName = sheetName.trim();
+  if (!normalizedSheetName) {
+    return null;
+  }
+
+  const metadataUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?tqx=out:json`;
+  const response = await fetch(metadataUrl);
+  if (!response.ok) {
+    return null;
+  }
+
+  const text = await response.text();
+  const tableMatches = Array.from(text.matchAll(/"table"\s*:\s*\{[^}]*"label"\s*:\s*"([^"]*)"[^}]*"url"\s*:\s*"([^"]*)"/g));
+  for (const match of tableMatches) {
+    const label = match[1].replace(/\\u([0-9a-fA-F]{4})/g, (_, code: string) => String.fromCharCode(Number.parseInt(code, 16)));
+    const gidMatch = match[2].match(/[?&]gid=([0-9]+)/);
+    if (label.trim().toLowerCase() === normalizedSheetName.toLowerCase() && gidMatch?.[1]) {
+      return gidMatch[1];
+    }
+  }
+
+  return null;
+}
+
+async function buildCsvUrl(spreadsheetId: string, sheetUrl: string, sheetName: string): Promise<string> {
+  const normalizedSheetName = sheetName.trim();
+  const explicitGid = extractSheetGid(sheetUrl);
+  if (normalizedSheetName) {
+    const params = new URLSearchParams({
+      tqx: 'out:csv',
+      sheet: normalizedSheetName,
+    });
+    return `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?${params.toString()}`;
+  }
+
+  const gid = explicitGid ?? await resolveSheetGid(spreadsheetId, normalizedSheetName);
+  const params = new URLSearchParams({ format: 'csv' });
+  if (gid) {
+    params.set('gid', gid);
+  }
+  return `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?${params.toString()}`;
+}
+
+function normalizeSheetUrlToEdit(urlOrId: string): string {
+  const spreadsheetId = extractSpreadsheetId(urlOrId) ?? (urlOrId.trim().match(/^[a-zA-Z0-9-_]+$/) ? urlOrId.trim() : null);
+  return spreadsheetId ? `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit` : urlOrId.trim();
+}
+
+async function callSheetAppsScript(url: string, payload: Record<string, unknown>): Promise<AppsScriptResponse> {
+  const payloadWithSheet = { ...payload };
+  if (typeof payloadWithSheet.sheetUrl === 'string') {
+    payloadWithSheet.sheetUrl = normalizeSheetUrlToEdit(payloadWithSheet.sheetUrl);
+  }
+
+  const response = await fetch(url.trim(), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'text/plain;charset=utf-8',
+    },
+    body: JSON.stringify(payloadWithSheet),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Apps Script request failed (${response.status}).`);
+  }
+
+  const data = await response.json() as AppsScriptResponse;
+  if (!data.success) {
+    throw new Error(`${data.error ?? 'APPS_SCRIPT_ERROR'}: ${data.message ?? 'Apps Script trả về lỗi.'}`);
+  }
+  return data;
+}
+
 function buildImportBatchName(existingNames: string[]): string {
   const now = new Date();
   const day = String(now.getDate()).padStart(2, '0');
@@ -132,6 +229,7 @@ function buildImportBatchName(existingNames: string[]): string {
 function normalizeImportFormState(value: Partial<SheetImportFormState> | null | undefined): SheetImportFormState {
   return {
     sheetUrl: typeof value?.sheetUrl === 'string' ? value.sheetUrl : DEFAULT_SHEET_IMPORT_FORM.sheetUrl,
+    sheetName: typeof value?.sheetName === 'string' ? value.sheetName : DEFAULT_SHEET_IMPORT_FORM.sheetName,
     startRow: typeof value?.startRow === 'string' ? value.startRow : DEFAULT_SHEET_IMPORT_FORM.startRow,
     endRow: typeof value?.endRow === 'string' ? value.endRow : DEFAULT_SHEET_IMPORT_FORM.endRow,
     titleColumn: typeof value?.titleColumn === 'string' ? value.titleColumn : DEFAULT_SHEET_IMPORT_FORM.titleColumn,
@@ -159,30 +257,71 @@ function buildRowNumbers(startRow: number, endRow: number): number[] {
   return rowNumbers;
 }
 
-function inferTitleFromBelow(rows: string[][], rowNumber: number, titleColumnIndex: number, rowNumbers: number[]): string | null {
-  const currentIndex = rowNumbers.indexOf(rowNumber);
-  if (currentIndex < 0) {
+function normalizeImportColumn(input: string): string {
+  return input.trim().toUpperCase();
+}
+
+interface ImportedSheetRowsResult {
+  rows: Array<{ rowNumber: number; cells: Record<string, string>; hasAnyData: boolean }>;
+  source: 'apps-script' | 'csv';
+}
+
+async function readRowsViaAppsScript(config: SheetImportFormState, spreadsheetId: string, startRow: number, endRow: number, columns: string[]): Promise<ImportedSheetRowsResult | null> {
+  if (!config.appScriptUrl.trim() || !config.appScriptToken.trim()) {
     return null;
   }
 
-  for (let index = currentIndex + 1; index < rowNumbers.length; index += 1) {
-    const lookupRow = rowNumbers[index];
-    const candidate = (rows[lookupRow - 1]?.[titleColumnIndex] ?? '').trim();
-    const match = candidate.match(/^([A-Za-z]+)(\d+)$/);
-    if (!match) {
-      continue;
-    }
+  const response = await callSheetAppsScript(config.appScriptUrl, {
+    token: config.appScriptToken,
+    action: 'read_rows',
+    startRow,
+    endRow,
+    columns,
+    sheetUrl: `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit`,
+    sheetName: config.sheetName.trim(),
+  });
 
-    const prefix = match[1];
-    const numeric = Number(match[2]);
-    if (!Number.isFinite(numeric)) {
-      continue;
-    }
+  return {
+    source: 'apps-script',
+    rows: (response.data ?? []).map((item) => ({
+      rowNumber: item.row,
+      cells: Object.fromEntries(columns.map((column) => [column, (item.cells[column]?.displayValue ?? '').trim()])),
+      hasAnyData: Object.values(item.cells).some((cell) => Boolean(cell?.displayValue?.trim())),
+    })),
+  };
+}
 
-    return `${prefix}${numeric + (lookupRow - rowNumber)}`;
+async function readRowsViaCsv(spreadsheetId: string, sheetUrl: string, sheetName: string, startRow: number, endRow: number, columns: string[]): Promise<ImportedSheetRowsResult> {
+  const csvUrl = await buildCsvUrl(spreadsheetId, sheetUrl, sheetName);
+  const response = await fetch(csvUrl);
+  if (!response.ok) {
+    throw new Error(`Không thể đọc Google Sheet (${response.status}). Hãy kiểm tra quyền public/share của sheet.`);
   }
 
-  return null;
+  const csvText = await response.text();
+  if (csvText.trimStart().startsWith('<')) {
+    throw new Error(sheetName.trim()
+      ? `Không đọc được tab "${sheetName.trim()}". Hãy kiểm tra Sheet name đúng chính tả/dấu cách và sheet có quyền truy cập.`
+      : 'Không đọc được CSV từ Google Sheet. Hãy kiểm tra quyền public/share của sheet.');
+  }
+
+  const rows = parseCsv(csvText);
+  const rowNumbers = buildRowNumbers(startRow, endRow);
+  const columnIndexes = new Map(columns.map((column) => [column, toColumnIndex(column)]));
+  return {
+    source: 'csv',
+    rows: rowNumbers.map((rowNumber) => {
+      const row = rows[rowNumber - 1] ?? [];
+      return {
+        rowNumber,
+        cells: Object.fromEntries(columns.map((column) => {
+          const index = columnIndexes.get(column);
+          return [column, index === null || index === undefined ? '' : (row[index] ?? '').trim()];
+        })),
+        hasAnyData: row.some((cell) => cell.trim()),
+      };
+    }),
+  };
 }
 
 export function useScriptBatch() {
@@ -436,6 +575,7 @@ export function useScriptBatch() {
     const nextForm = normalizeImportFormState({
       ...sheetImportForm,
       sheetUrl: config.sheetUrl,
+      sheetName: config.sheetName,
       appScriptUrl: config.appScriptUrl,
       appScriptToken: config.appScriptToken,
     });
@@ -479,7 +619,7 @@ export function useScriptBatch() {
     }
   }, [sheetImportForm]);
 
-  const importFromGoogleSheet = useCallback(async (sheetUrl: string, startRow: number, endRow: number, titleColumn: string, contentColumn: string, videoTitleColumn: string, outputColumn: string) => {
+  const importFromGoogleSheet = useCallback(async (sheetUrl: string, sheetName: string, startRow: number, endRow: number, titleColumn: string, contentColumn: string, videoTitleColumn: string, outputColumn: string) => {
     try {
       setImportingSheet(true);
       setImportMessage('');
@@ -495,33 +635,34 @@ export function useScriptBatch() {
         return;
       }
 
-      const csvUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=csv`;
-      const response = await fetch(csvUrl);
-      if (!response.ok) {
-        setImportMessage(`Không thể đọc Google Sheet (${response.status}). Hãy kiểm tra quyền public/share của sheet.`);
+      const normalizedTitleColumn = normalizeImportColumn(titleColumn);
+      const normalizedContentColumn = normalizeImportColumn(contentColumn);
+      const normalizedVideoTitleColumn = normalizeImportColumn(videoTitleColumn);
+      const normalizedOutputColumn = normalizeImportColumn(outputColumn);
+      const columns = Array.from(new Set([normalizedTitleColumn, normalizedContentColumn, normalizedVideoTitleColumn]));
+
+      if (columns.some((column) => toColumnIndex(column) === null) || !normalizedOutputColumn) {
+        setImportMessage('Không xác định được cột title/content/video/output. Có thể nhập dạng A, C, E, G hoặc số cột.');
         return;
       }
 
-      const csvText = await response.text();
-      const rows = parseCsv(csvText);
-      const rowNumbers = buildRowNumbers(startRow, endRow);
-      const titleColumnIndex = toColumnIndex(titleColumn);
-      const contentColumnIndex = toColumnIndex(contentColumn);
-      const videoTitleColumnIndex = toColumnIndex(videoTitleColumn);
-
-      if (titleColumnIndex === null || contentColumnIndex === null || videoTitleColumnIndex === null || !outputColumn.trim()) {
-        setImportMessage('Không xác định được cột title/content/video/output. Có thể nhập dạng A, H, E, I hoặc số cột.');
-        return;
+      let sheetRows = await readRowsViaAppsScript(normalizeImportFormState(sheetImportForm), spreadsheetId, startRow, endRow, columns);
+      if (!sheetRows) {
+        sheetRows = await readRowsViaCsv(spreadsheetId, sheetUrl, sheetName, startRow, endRow, columns);
       }
 
       const importedScripts: Script[] = [];
+      let emptyContentRows = 0;
       const normalizedSheetUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}`;
-      for (const rowNumber of rowNumbers) {
-        const row = rows[rowNumber - 1] ?? [];
-        const rawNumberNo = (row[titleColumnIndex] ?? '').trim();
-        const inferredNumberNo = rawNumberNo || inferTitleFromBelow(rows, rowNumber, titleColumnIndex, rowNumbers);
-        const content = (row[contentColumnIndex] ?? '').trim();
-        const videoTitle = (row[videoTitleColumnIndex] ?? '').trim();
+      for (const sheetRow of sheetRows.rows) {
+        const rowNumber = sheetRow.rowNumber;
+        const rawNumberNo = (sheetRow.cells[normalizedTitleColumn] ?? '').trim();
+        const inferredNumberNo = rawNumberNo || null;
+        const content = (sheetRow.cells[normalizedContentColumn] ?? '').trim();
+        const videoTitle = (sheetRow.cells[normalizedVideoTitleColumn] ?? '').trim();
+        if (!content && (inferredNumberNo || videoTitle || sheetRow.hasAnyData)) {
+          emptyContentRows += 1;
+        }
         if (!inferredNumberNo && !videoTitle && !content) {
           continue;
         }
@@ -535,11 +676,12 @@ export function useScriptBatch() {
           source: {
             spreadsheetId,
             sheetUrl: normalizedSheetUrl,
+            sheetName: sheetName.trim() || undefined,
             sourceRowNumber: rowNumber,
-            titleColumn: titleColumn.trim().toUpperCase(),
-            contentColumn: contentColumn.trim().toUpperCase(),
-            videoTitleColumn: videoTitleColumn.trim().toUpperCase(),
-            outputColumn: outputColumn.trim().toUpperCase(),
+            titleColumn: normalizedTitleColumn,
+            contentColumn: normalizedContentColumn,
+            videoTitleColumn: normalizedVideoTitleColumn,
+            outputColumn: normalizedOutputColumn,
             videoTitle,
           },
         });
@@ -563,7 +705,7 @@ export function useScriptBatch() {
       setBatches((current) => [...current, importedBatch]);
       setSelectedBatchId(importedBatch.id);
       setSelectedScriptId(importedBatch.scripts[0]?.id ?? null);
-      setImportMessage(`Đã import ${importedScripts.length} script(s) từ Google Sheet vào batch ${importedBatch.name}.`);
+      setImportMessage(`Đã import ${importedScripts.length} script(s) từ Google Sheet${sheetName.trim() ? ` tab "${sheetName.trim()}"` : ''} vào batch ${importedBatch.name}. Nguồn đọc: ${sheetRows.source === 'apps-script' ? 'Apps Script read_rows (giữ đúng row thật)' : 'CSV fallback'}.${emptyContentRows > 0 ? ` Cảnh báo: ${emptyContentRows} row có content rỗng ở cột ${normalizedContentColumn}. Hãy kiểm tra Content column có đúng với sheet không.` : ''}`);
     } catch (error) {
       setImportMessage(error instanceof Error ? error.message : 'Import Google Sheet thất bại.');
     } finally {
