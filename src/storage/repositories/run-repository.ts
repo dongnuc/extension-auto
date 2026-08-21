@@ -107,6 +107,17 @@ export class RunRepository {
     return updated;
   }
 
+  async restoreRunHistoryRun(run: Run): Promise<'restored' | 'already-exists'> {
+    const history = await this.getRunHistory();
+    if (history.some((item) => item.id === run.id)) {
+      return 'already-exists';
+    }
+
+    history.unshift(normalizeRun(run));
+    await chromeStorageArea.setItem(STORAGE_KEYS.runHistory, history);
+    return 'restored';
+  }
+
   async deleteRunHistoryRun(runId: string): Promise<void> {
     const history = await this.getRunHistory();
     const filtered = history.filter((run) => run.id !== runId);

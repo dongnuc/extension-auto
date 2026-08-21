@@ -1,7 +1,9 @@
-import type { Run, RunCalendarEntry, RunCalendarItem, ScriptBatch } from '../../core/models';
+import type { GemProfile, Run, RunCalendarEntry, RunCalendarItem, RunJob, ScriptBatch } from '../../core/models';
+import { createDefaultProfile } from '../../core/factories';
 import { chromeStorageArea } from '../chrome-storage';
 import { STORAGE_KEYS } from '../keys';
 import { batchRepository } from './batch-repository';
+import { runRepository } from './run-repository';
 
 const MAX_CALENDAR_ENTRIES = 300;
 
@@ -62,6 +64,97 @@ function buildCalendarItems(run: Run, batch: ScriptBatch | null): RunCalendarIte
   });
 }
 
+function isRecoverableStatus(status: string): RunJob['status'] {
+  const allowedStatuses: RunJob['status'][] = ['pending', 'launching', 'submitted', 'running', 'completed', 'failed', 'skipped', 'stopped'];
+  return allowedStatuses.includes(status as RunJob['status']) ? status as RunJob['status'] : 'completed';
+}
+
+function createRecoveredProfile(entry: RunCalendarEntry): GemProfile {
+  const timestamp = new Date().toISOString();
+  const profile = createDefaultProfile();
+  return {
+    ...profile,
+    id: `recovered-profile-${entry.runId}`,
+    name: entry.profileName || 'Recovered Profile',
+    baseUrl: entry.items.find((item) => item.profileUrl)?.profileUrl ?? profile.baseUrl,
+    createdAt: entry.createdAt || timestamp,
+    updatedAt: entry.updatedAt || timestamp,
+  };
+}
+
+function buildRecoveredRun(entry: RunCalendarEntry, batch: ScriptBatch | null): Run {
+  const normalizedEntry = normalizeEntry(entry);
+  const timestamp = new Date().toISOString();
+  const jobs: RunJob[] = normalizedEntry.items.map((item, index) => {
+    const script = batch?.scripts.find((batchScript) => batchScript.id === item.scriptId)
+      ?? batch?.scripts.find((batchScript) => batchScript.title.trim().toLowerCase() === item.scriptTitle.trim().toLowerCase())
+      ?? null;
+    const source = script?.source
+      ? {
+          ...script.source,
+          sourceRowNumber: item.rowNumber ?? script.source.sourceRowNumber,
+        }
+      : null;
+    const status = isRecoverableStatus(item.status);
+    return {
+      scriptId: item.scriptId || `recovered-${normalizedEntry.runId}-${index}`,
+      scriptTitle: item.scriptTitle || script?.title || 'Recovered Item',
+      scriptNumberNo: item.numberNo || script?.numberNo || null,
+      profileName: item.profileName || normalizedEntry.profileName,
+      inputField: item.inputField ?? 'content',
+      order: index,
+      status,
+      tabId: null,
+      url: item.profileUrl,
+      currentTabUrl: item.generatedUrl,
+      startedAt: normalizedEntry.createdAt,
+      submittedAt: ['submitted', 'completed'].includes(status) ? normalizedEntry.updatedAt : null,
+      output: '',
+      errorMessage: null,
+      source,
+      sheetWriteback: {
+        status: source ? 'ready' : 'idle',
+        targetRowNumber: item.rowNumber,
+        targetColumn: source?.outputColumn ?? null,
+        writtenAt: null,
+        message: 'Recovered from Run Calendar snapshot. Detailed outputs were not stored in this snapshot.',
+      },
+    };
+  });
+
+  return {
+    id: normalizedEntry.runId,
+    batchId: normalizedEntry.batchId,
+    profileSnapshot: createRecoveredProfile(normalizedEntry),
+    selectedScriptIds: jobs.map((job) => job.scriptId),
+    jobs,
+    currentJobIndex: jobs.findIndex((job) => !['completed', 'failed', 'skipped', 'stopped'].includes(job.status)) >= 0
+      ? jobs.findIndex((job) => !['completed', 'failed', 'skipped', 'stopped'].includes(job.status))
+      : 0,
+    status: normalizedEntry.status === 'completed' || normalizedEntry.status === 'failed' || normalizedEntry.status === 'stopped'
+      ? normalizedEntry.status
+      : 'completed',
+    activeTabId: null,
+    progress: {
+      totalJobs: jobs.length,
+      completedJobs: jobs.filter((job) => job.status === 'completed').length,
+      failedJobs: jobs.filter((job) => job.status === 'failed').length,
+      stoppedJobs: jobs.filter((job) => job.status === 'stopped').length,
+      submittedJobs: jobs.filter((job) => ['submitted', 'completed'].includes(job.status)).length,
+      currentScriptId: jobs[0]?.scriptId ?? null,
+      currentStageId: null,
+      currentStageName: null,
+      currentStageIndex: null,
+      retryMode: 'none',
+      currentStepLabel: 'Recovered from Run Calendar.',
+      lastMessage: 'Recovered from Run Calendar snapshot. Final outputs/stage results can only reappear if they still exist in storage.',
+      lastError: null,
+    },
+    createdAt: normalizedEntry.createdAt || timestamp,
+    updatedAt: normalizedEntry.updatedAt || timestamp,
+  };
+}
+
 export class RunCalendarRepository {
   async getAll(): Promise<RunCalendarEntry[]> {
     const entries = await chromeStorageArea.getItem<RunCalendarEntry[]>(STORAGE_KEYS.runCalendar, []);
@@ -107,6 +200,16 @@ export class RunCalendarRepository {
   async upsertFromRunWithBatchLookup(run: Run): Promise<void> {
     const batch = await batchRepository.getById(run.batchId);
     await this.upsertFromRun(run, batch);
+  }
+
+  async recoverToResults(runId: string): Promise<'restored' | 'already-exists' | 'not-found'> {
+    const entry = (await this.getAll()).find((item) => item.runId === runId || item.runIds.includes(runId));
+    if (!entry) {
+      return 'not-found';
+    }
+
+    const batch = await batchRepository.getById(entry.batchId);
+    return runRepository.restoreRunHistoryRun(buildRecoveredRun(entry, batch));
   }
 
   async delete(runId: string): Promise<void> {

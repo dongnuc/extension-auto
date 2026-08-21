@@ -8,7 +8,7 @@ function formatDate(value: string): string {
 }
 
 export function RunCalendarPage() {
-  const { entries, loading, deleteEntry } = useRunCalendar();
+  const { entries, loading, message, deleteEntry, recoverEntry } = useRunCalendar();
   const [detailEntry, setDetailEntry] = useState<RunCalendarEntry | null>(null);
 
   if (loading) {
@@ -26,6 +26,10 @@ export function RunCalendarPage() {
           <h2 className="section-title">Run Calendar</h2>
           <p className="section-subtitle">Simple calendar of runs. This keeps NumberNo and generated profile links even when detailed run rows are deleted from Results.</p>
         </div>
+
+        {message ? (
+          <div className="badge" style={{ width: 'fit-content' }}>{message}</div>
+        ) : null}
 
         {entries.length === 0 ? (
           <div className="panel" style={{ borderRadius: 16, padding: 16, color: '#9fb1cd' }}>
@@ -57,6 +61,9 @@ export function RunCalendarPage() {
                         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                           <button type="button" className="button" onClick={() => setDetailEntry(entry)}>
                             View detail
+                          </button>
+                          <button type="button" className="button" onClick={() => void recoverEntry(entry.runId)}>
+                            Recover to Results
                           </button>
                           <button type="button" className="button secondary" onClick={() => void deleteEntry(entry.runId)}>
                             Delete
