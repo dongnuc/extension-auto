@@ -4,7 +4,7 @@ const manifest = {
   description: 'Automate Gemini Gem processing flows for batched scripts.',
   version: '0.1.0',
   permissions: ['storage', 'tabs', 'downloads', 'scripting'],
-  host_permissions: ['https://gemini.google.com/*', 'https://docs.google.com/*', 'https://script.google.com/*', 'https://translate.googleapis.com/*'],
+  host_permissions: ['https://gemini.google.com/*', 'https://docs.google.com/*', 'https://script.google.com/*', 'https://translate.googleapis.com/*', 'https://www.youtube.com/*', 'https://youtu.be/*'],
   background: {
     service_worker: 'src/background/service-worker.ts',
     type: 'module',
@@ -18,6 +18,11 @@ const manifest = {
     {
       matches: ['https://gemini.google.com/*'],
       js: ['src/content/gemini-content.ts'],
+      run_at: 'document_idle',
+    },
+    {
+      matches: ['https://www.youtube.com/*', 'https://youtu.be/*'],
+      js: ['src/content/youtube-content.ts'],
       run_at: 'document_idle',
     },
   ],

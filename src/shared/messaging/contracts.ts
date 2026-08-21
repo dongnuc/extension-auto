@@ -20,6 +20,8 @@ export const runtimeMessageTypes = {
   submitTextToRunJobTab: 'SUBMIT_TEXT_TO_RUN_JOB_TAB',
   cancelWait: 'CANCEL_WAIT',
   getPageState: 'GET_PAGE_STATE',
+  extractYoutubeTranscriptFromPage: 'EXTRACT_YOUTUBE_TRANSCRIPT_FROM_PAGE',
+  extractYoutubeTranscriptByTab: 'EXTRACT_YOUTUBE_TRANSCRIPT_BY_TAB',
 } as const;
 
 export type RuntimeMessageType =
@@ -121,4 +123,19 @@ export interface RuntimeConversationStateData {
   busyProcessing: boolean;
   latestResponseText: string;
   responseLength: number;
+}
+
+export interface YoutubeTranscriptPageSegment {
+  startMs: number;
+  durationMs: number;
+  timestamp: string;
+  text: string;
+}
+
+export interface YoutubeTranscriptPageData {
+  title: string;
+  url: string;
+  segments: YoutubeTranscriptPageSegment[];
+  textNoTimestamp: string;
+  textWithTimestamp: string;
 }

@@ -14,14 +14,19 @@ export function ScriptsPage() {
     importMessage,
     importingSheet,
     translatingSheetTitles,
+    extractingYoutubeScripts,
     sheetImportForm,
+    sheetConfigs,
+    selectedSheetConfigId,
     validation,
     setSelectedBatchId,
     setSelectedScriptId,
     setBatchName,
     updateSheetImportForm,
     saveSheetImportConfig,
+    selectSheetConfig,
     translateVideoTitlesToVietnamese,
+    extractYoutubeScripts,
     createBatch,
     deleteBatch,
     importFromGoogleSheet,
@@ -68,13 +73,23 @@ export function ScriptsPage() {
       <section className="panel card" style={{ display: 'grid', gap: 14 }}>
         <div>
           <h2 className="section-title">Import from Google Sheet</h2>
-          <p className="section-subtitle">Configure Google Sheet link, title column, content column, and row range. Import still supports reverse order like 10 to 8.</p>
+          <p className="section-subtitle">Select a saved Google Sheet config, then configure columns/range for import/write-back/extract.</p>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(260px, 1fr) repeat(6, minmax(110px, 160px))', gap: 12, alignItems: 'end' }}>
-          <div className="field">
-            <label htmlFor="sheet-url">Google Sheet link</label>
-            <input id="sheet-url" value={sheetImportForm.sheetUrl} onChange={(event) => updateSheetImportForm({ sheetUrl: event.target.value })} placeholder="https://docs.google.com/spreadsheets/d/..." />
+        <div className="panel" style={{ display: 'grid', gap: 10, padding: 14 }}>
+          <div className="field" style={{ maxWidth: 520 }}>
+            <label htmlFor="sheet-config-selector">Google Sheet config</label>
+            <select id="sheet-config-selector" value={selectedSheetConfigId} onChange={(event) => void selectSheetConfig(event.target.value)}>
+              <option value="">Manual / unsaved config</option>
+              {sheetConfigs.map((config) => (
+                <option key={config.id} value={config.id}>{config.name}</option>
+              ))}
+            </select>
           </div>
+          <div style={{ color: '#9fb1cd', fontSize: 13 }}>
+            Thêm/sửa/xóa Google Sheet link, Apps Script Web App URL và API key ở tab Google Sheets. Component Scripts chỉ chọn config để chạy logic bên dưới.
+          </div>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, minmax(110px, 160px))', gap: 12, alignItems: 'end' }}>
           <div className="field">
             <label htmlFor="sheet-title-column">Title column</label>
             <input id="sheet-title-column" value={sheetImportForm.titleColumn} onChange={(event) => updateSheetImportForm({ titleColumn: event.target.value })} placeholder="A" />
@@ -100,15 +115,7 @@ export function ScriptsPage() {
             <input id="sheet-end-row" type="number" min={1} value={sheetImportForm.endRow} onChange={(event) => updateSheetImportForm({ endRow: event.target.value })} />
           </div>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(260px, 1fr) minmax(220px, 420px) repeat(2, minmax(110px, 160px))', gap: 12, alignItems: 'end' }}>
-          <div className="field">
-            <label htmlFor="app-script-url">Apps Script Web App URL</label>
-            <input id="app-script-url" value={sheetImportForm.appScriptUrl} onChange={(event) => updateSheetImportForm({ appScriptUrl: event.target.value })} placeholder="https://script.google.com/macros/s/.../exec" />
-          </div>
-          <div className="field">
-            <label htmlFor="app-script-token">Apps Script API token</label>
-            <input id="app-script-token" type="password" value={sheetImportForm.appScriptToken} onChange={(event) => updateSheetImportForm({ appScriptToken: event.target.value })} placeholder="TOOL_API_TOKEN" />
-          </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(110px, 160px))', gap: 12, alignItems: 'end' }}>
           <div className="field">
             <label htmlFor="translation-source-column">Translate from</label>
             <input id="translation-source-column" value={sheetImportForm.translationSourceColumn} onChange={(event) => updateSheetImportForm({ translationSourceColumn: event.target.value })} placeholder="E" />
@@ -116,6 +123,28 @@ export function ScriptsPage() {
           <div className="field">
             <label htmlFor="translation-output-column">Translate output</label>
             <input id="translation-output-column" value={sheetImportForm.translationOutputColumn} onChange={(event) => updateSheetImportForm({ translationOutputColumn: event.target.value })} placeholder="D" />
+          </div>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(110px, 1fr))', gap: 12, alignItems: 'end' }}>
+          <div className="field">
+            <label htmlFor="youtube-url-column">YouTube URL col</label>
+            <input id="youtube-url-column" value={sheetImportForm.youtubeUrlColumn} onChange={(event) => updateSheetImportForm({ youtubeUrlColumn: event.target.value })} placeholder="B" />
+          </div>
+          <div className="field">
+            <label htmlFor="youtube-title-output-column">YT title output</label>
+            <input id="youtube-title-output-column" value={sheetImportForm.youtubeTitleOutputColumn} onChange={(event) => updateSheetImportForm({ youtubeTitleOutputColumn: event.target.value })} placeholder="E" />
+          </div>
+          <div className="field">
+            <label htmlFor="youtube-transcript-output-column">Transcript output</label>
+            <input id="youtube-transcript-output-column" value={sheetImportForm.youtubeTranscriptOutputColumn} onChange={(event) => updateSheetImportForm({ youtubeTranscriptOutputColumn: event.target.value })} placeholder="H" />
+          </div>
+          <div className="field">
+            <label htmlFor="youtube-transcript-ts-column">With timestamp</label>
+            <input id="youtube-transcript-ts-column" value={sheetImportForm.youtubeTranscriptTimestampColumn} onChange={(event) => updateSheetImportForm({ youtubeTranscriptTimestampColumn: event.target.value })} placeholder="I" />
+          </div>
+          <div className="field">
+            <label htmlFor="youtube-preferred-language">Caption lang</label>
+            <input id="youtube-preferred-language" value={sheetImportForm.youtubePreferredLanguage} onChange={(event) => updateSheetImportForm({ youtubePreferredLanguage: event.target.value })} placeholder="ja" />
           </div>
         </div>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -137,13 +166,22 @@ export function ScriptsPage() {
           <button
             className="button secondary"
             type="button"
-            disabled={translatingSheetTitles || importingSheet || !sheetImportForm.translationSourceColumn.trim() || !sheetImportForm.translationOutputColumn.trim() || !sheetImportForm.startRow || !sheetImportForm.endRow}
+            disabled={translatingSheetTitles || importingSheet || extractingYoutubeScripts || !sheetImportForm.translationSourceColumn.trim() || !sheetImportForm.translationOutputColumn.trim() || !sheetImportForm.startRow || !sheetImportForm.endRow}
             onClick={() => void translateVideoTitlesToVietnamese()}
             title="Uses saved config: reads the configured translation source column by row range and writes Vietnamese title to the configured output column."
           >
             {translatingSheetTitles ? 'Translating titles...' : `Translate ${sheetImportForm.translationSourceColumn || 'E'} → ${sheetImportForm.translationOutputColumn || 'D'}`}
           </button>
-          <span style={{ color: '#9fb1cd', fontSize: 13 }}>Import uses the current form values. Write-back and title translation use the latest saved config.</span>
+          <button
+            className="button secondary"
+            type="button"
+            disabled={extractingYoutubeScripts || importingSheet || translatingSheetTitles || !sheetImportForm.youtubeUrlColumn.trim() || !sheetImportForm.youtubeTitleOutputColumn.trim() || !sheetImportForm.youtubeTranscriptOutputColumn.trim() || !sheetImportForm.youtubeTranscriptTimestampColumn.trim() || !sheetImportForm.startRow || !sheetImportForm.endRow}
+            onClick={() => void extractYoutubeScripts()}
+            title="Reads YouTube URLs from the configured column, extracts title/transcript in background, then writes back to configured output columns."
+          >
+            {extractingYoutubeScripts ? 'Extracting YouTube...' : `Extract YouTube ${sheetImportForm.youtubeUrlColumn || 'B'} → transcript`}
+          </button>
+          <span style={{ color: '#9fb1cd', fontSize: 13 }}>Import uses current form values. Write-back, title translation, and YouTube extraction save then use this config.</span>
         </div>
         {importMessage ? <div className="badge">{importMessage}</div> : null}
       </section>

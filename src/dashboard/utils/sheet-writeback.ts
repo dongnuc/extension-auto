@@ -1,6 +1,7 @@
 import type { RunJob } from '../../core/models';
 import { chromeStorageArea } from '../../storage/chrome-storage';
 import { STORAGE_KEYS } from '../../storage/keys';
+import { runtimeMessageTypes, type YoutubeTranscriptPageData } from '../../shared/messaging/contracts';
 
 interface SheetImportFormState {
   sheetUrl: string;
@@ -12,6 +13,11 @@ interface SheetImportFormState {
   outputColumn: string;
   translationSourceColumn: string;
   translationOutputColumn: string;
+  youtubeUrlColumn: string;
+  youtubeTitleOutputColumn: string;
+  youtubeTranscriptOutputColumn: string;
+  youtubeTranscriptTimestampColumn: string;
+  youtubePreferredLanguage: string;
   appScriptUrl: string;
   appScriptToken: string;
 }
@@ -61,6 +67,11 @@ const DEFAULT_SHEET_IMPORT_FORM: SheetImportFormState = {
   outputColumn: 'I',
   translationSourceColumn: 'E',
   translationOutputColumn: 'D',
+  youtubeUrlColumn: 'B',
+  youtubeTitleOutputColumn: 'E',
+  youtubeTranscriptOutputColumn: 'H',
+  youtubeTranscriptTimestampColumn: 'I',
+  youtubePreferredLanguage: 'ja',
   appScriptUrl: '',
   appScriptToken: '',
 };
@@ -84,6 +95,11 @@ function normalizeForm(value: Partial<SheetImportFormState> | null | undefined):
     outputColumn: typeof value?.outputColumn === 'string' ? value.outputColumn : DEFAULT_SHEET_IMPORT_FORM.outputColumn,
     translationSourceColumn: typeof value?.translationSourceColumn === 'string' ? value.translationSourceColumn : DEFAULT_SHEET_IMPORT_FORM.translationSourceColumn,
     translationOutputColumn: typeof value?.translationOutputColumn === 'string' ? value.translationOutputColumn : DEFAULT_SHEET_IMPORT_FORM.translationOutputColumn,
+    youtubeUrlColumn: typeof value?.youtubeUrlColumn === 'string' ? value.youtubeUrlColumn : DEFAULT_SHEET_IMPORT_FORM.youtubeUrlColumn,
+    youtubeTitleOutputColumn: typeof value?.youtubeTitleOutputColumn === 'string' ? value.youtubeTitleOutputColumn : DEFAULT_SHEET_IMPORT_FORM.youtubeTitleOutputColumn,
+    youtubeTranscriptOutputColumn: typeof value?.youtubeTranscriptOutputColumn === 'string' ? value.youtubeTranscriptOutputColumn : DEFAULT_SHEET_IMPORT_FORM.youtubeTranscriptOutputColumn,
+    youtubeTranscriptTimestampColumn: typeof value?.youtubeTranscriptTimestampColumn === 'string' ? value.youtubeTranscriptTimestampColumn : DEFAULT_SHEET_IMPORT_FORM.youtubeTranscriptTimestampColumn,
+    youtubePreferredLanguage: typeof value?.youtubePreferredLanguage === 'string' ? value.youtubePreferredLanguage : DEFAULT_SHEET_IMPORT_FORM.youtubePreferredLanguage,
     appScriptUrl: typeof value?.appScriptUrl === 'string' ? value.appScriptUrl : DEFAULT_SHEET_IMPORT_FORM.appScriptUrl,
     appScriptToken: typeof value?.appScriptToken === 'string' ? value.appScriptToken : DEFAULT_SHEET_IMPORT_FORM.appScriptToken,
   };
@@ -94,13 +110,43 @@ async function loadWritebackConfig(): Promise<SheetImportFormState> {
   return normalizeForm(saved);
 }
 
+function normalizeSheetUrlToEdit(urlOrId: string | null | undefined): string | undefined {
+  const text = String(urlOrId || '').trim();
+  if (!text) {
+    return undefined;
+  }
+
+  // 1. Try matching standard spreadsheets/d/<ID> URL format
+  const match = text.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+  const spreadsheetId = match?.[1] || (text.match(/^[a-zA-Z0-9-_]+$/) ? text : null);
+
+  if (spreadsheetId) {
+    // Return standard, clean edit URL that SpreadsheetApp.openByUrl is guaranteed to accept
+    return `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit`;
+  }
+
+  return text;
+}
+
 async function callAppsScript(url: string, payload: Record<string, unknown>): Promise<AppsScriptResponse> {
-  const response = await fetch(url, {
+  const payloadWithSheet = { ...payload };
+  if (!payloadWithSheet.sheetUrl && ['read_rows', 'update_row'].includes(String(payloadWithSheet.action ?? ''))) {
+    const config = await loadWritebackConfig();
+    if (config.sheetUrl.trim()) {
+      payloadWithSheet.sheetUrl = config.sheetUrl.trim();
+    }
+  }
+
+  if (typeof payloadWithSheet.sheetUrl === 'string') {
+    payloadWithSheet.sheetUrl = normalizeSheetUrlToEdit(payloadWithSheet.sheetUrl);
+  }
+
+  const response = await fetch(url.trim(), {
     method: 'POST',
     headers: {
       'Content-Type': 'text/plain;charset=utf-8',
     },
-    body: JSON.stringify(payload),
+    body: JSON.stringify(payloadWithSheet),
   });
 
   if (!response.ok) {
@@ -122,10 +168,11 @@ function resolveVideoTitle(job: RunJob): string {
   return (job.source?.videoTitle || job.scriptTitle || '').trim();
 }
 
-function resolveColumns(config: SheetImportFormState): { videoTitleColumn: string; outputColumn: string } {
+function resolveColumns(config: SheetImportFormState): { videoTitleColumn: string; outputColumn: string; titleColumn: string } {
   return {
     videoTitleColumn: normalizeColumn(config.videoTitleColumn),
     outputColumn: normalizeColumn(config.outputColumn),
+    titleColumn: normalizeColumn(config.titleColumn || 'A'),
   };
 }
 
@@ -170,19 +217,64 @@ function idleTick(): Promise<void> {
 }
 
 async function resolveTargetRow(job: RunJob, config: SheetImportFormState): Promise<{ rowNumber: number | null; message: string; status: SheetWritebackResolution['status']; outputColumn: string }> {
-  const videoTitle = resolveVideoTitle(job);
-  const { videoTitleColumn, outputColumn } = resolveColumns(config);
-  if (!videoTitle) {
-    return { rowNumber: null, message: 'Thiếu video title để tìm row trong Google Sheet.', status: 'missing-source', outputColumn };
+  const { videoTitleColumn, outputColumn, titleColumn } = resolveColumns(config);
+  
+  // Quyết định vùng quét dòng rộng hơn để bao phủ cả các dòng bị dịch chuyển xuống dưới
+  const startRow = 3; // Luôn bắt đầu quét từ dòng dữ liệu đầu tiên (dòng 3)
+  const endRow = Math.max(
+    Number(config.endRow) || 100,
+    (job.source?.sourceRowNumber ?? 0) + 150, // Cộng thêm biên an toàn 150 dòng đề phòng chèn dòng mới
+    200 // Quét tối thiểu 200 dòng để luôn bao phủ dữ liệu lớn
+  );
+
+  // 1. Tìm kiếm bằng Mã Code hàng độc nhất (Cột A)
+  const rowCode = (job.scriptNumberNo || '').trim();
+  const searchColumn = (job.source?.titleColumn || titleColumn || 'A').toUpperCase();
+
+  if (rowCode) {
+    try {
+      const readResponse = await callAppsScript(config.appScriptUrl, {
+        token: config.appScriptToken,
+        action: 'read_rows',
+        startRow,
+        endRow,
+        columns: [searchColumn],
+        sheetUrl: job.source?.sheetUrl || config.sheetUrl,
+      });
+
+      const matches = (readResponse.data ?? [])
+        .map((item) => ({
+          rowNumber: item.row,
+          code: (item.cells[searchColumn]?.displayValue ?? '').trim(),
+        }))
+        .filter((item) => item.code === rowCode);
+
+      if (matches.length === 1 && matches[0].rowNumber) {
+        return {
+          rowNumber: matches[0].rowNumber,
+          message: `Đã xác định row ${matches[0].rowNumber} từ Row Code (${rowCode}).`,
+          status: 'written',
+          outputColumn,
+        };
+      }
+    } catch (err) {
+      console.warn('Truy vấn theo Row Code thất bại, chuyển sang chế độ dự phòng tìm theo Title:', err);
+    }
   }
 
-  const { startRow, endRow } = resolveRowRange(config);
+  // 2. Chế độ dự phòng (Fallback): Tìm theo tiêu đề video
+  const videoTitle = resolveVideoTitle(job);
+  if (!videoTitle) {
+    return { rowNumber: null, message: 'Thiếu video title/Row Code để tìm row trong Google Sheet.', status: 'missing-source', outputColumn };
+  }
+
   const readResponse = await callAppsScript(config.appScriptUrl, {
     token: config.appScriptToken,
     action: 'read_rows',
     startRow,
     endRow,
     columns: [videoTitleColumn],
+    sheetUrl: job.source?.sheetUrl || config.sheetUrl,
   });
 
   const normalizedVideoTitle = videoTitle.toLowerCase();
@@ -297,6 +389,113 @@ export async function translateSheetVideoTitlesToVietnamese(sourceColumnInput = 
   }
 }
 
+export interface YoutubeSheetExtractionResult {
+  success: boolean;
+  processedRows: number;
+  extractedRows: number;
+  skippedRows: number;
+  failedRows: number;
+  message: string;
+}
+
+async function extractYoutubeTranscriptViaTab(url: string): Promise<YoutubeTranscriptPageData> {
+  const response = await chrome.runtime.sendMessage({
+    type: runtimeMessageTypes.extractYoutubeTranscriptByTab,
+    url,
+  }) as { ok?: boolean; data?: YoutubeTranscriptPageData; message?: string } | undefined;
+
+  if (!response?.ok || !response.data) {
+    throw new Error(response?.message || 'YOUTUBE_TAB_EXTRACTION_FAILED');
+  }
+  return response.data;
+}
+
+export async function extractYoutubeScriptsFromSheet(formOverride?: Partial<SheetImportFormState>): Promise<YoutubeSheetExtractionResult> {
+  const config = normalizeForm(formOverride ?? await loadWritebackConfig());
+  if (!config.appScriptUrl.trim()) {
+    return { success: false, processedRows: 0, extractedRows: 0, skippedRows: 0, failedRows: 0, message: 'Thiếu Apps Script Web App URL. Hãy cấu hình và bấm Save Config trước.' };
+  }
+  if (!config.appScriptToken.trim()) {
+    return { success: false, processedRows: 0, extractedRows: 0, skippedRows: 0, failedRows: 0, message: 'Thiếu Apps Script API token. Hãy cấu hình và bấm Save Config trước.' };
+  }
+
+  try {
+    const youtubeUrlColumn = normalizeColumn(config.youtubeUrlColumn);
+    const titleOutputColumn = normalizeColumn(config.youtubeTitleOutputColumn);
+    const transcriptOutputColumn = normalizeColumn(config.youtubeTranscriptOutputColumn);
+    const timestampOutputColumn = normalizeColumn(config.youtubeTranscriptTimestampColumn);
+    const { startRow, endRow } = resolveRowRange(config);
+    const readResponse = await callAppsScript(config.appScriptUrl, {
+      token: config.appScriptToken,
+      action: 'read_rows',
+      startRow,
+      endRow,
+      columns: [youtubeUrlColumn],
+    });
+
+    let processedRows = 0;
+    let extractedRows = 0;
+    let skippedRows = 0;
+    let failedRows = 0;
+
+    for (const row of readResponse.data ?? []) {
+      processedRows += 1;
+      const youtubeUrl = (row.cells[youtubeUrlColumn]?.displayValue ?? '').trim();
+      if (!youtubeUrl) {
+        skippedRows += 1;
+        await idleTick();
+        continue;
+      }
+
+      try {
+        const transcript = await extractYoutubeTranscriptViaTab(youtubeUrl);
+        await callAppsScript(config.appScriptUrl, {
+          token: config.appScriptToken,
+          action: 'update_row',
+          row: row.row,
+          values: {
+            [titleOutputColumn]: transcript.title,
+            [transcriptOutputColumn]: transcript.textNoTimestamp,
+            [timestampOutputColumn]: transcript.textWithTimestamp,
+          },
+        });
+        extractedRows += 1;
+      } catch (error) {
+        failedRows += 1;
+        const message = error instanceof Error ? error.message : 'UNKNOWN_ERROR';
+        await callAppsScript(config.appScriptUrl, {
+          token: config.appScriptToken,
+          action: 'update_row',
+          row: row.row,
+          values: {
+            [transcriptOutputColumn]: `ERROR|${message}`.slice(0, 450),
+          },
+        });
+      }
+
+      await idleTick();
+    }
+
+    return {
+      success: failedRows === 0,
+      processedRows,
+      extractedRows,
+      skippedRows,
+      failedRows,
+      message: `YouTube extraction hoàn tất: ${extractedRows} row đã ghi title/transcript, ${skippedRows} row bỏ qua, ${failedRows} row lỗi.`,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      processedRows: 0,
+      extractedRows: 0,
+      skippedRows: 0,
+      failedRows: 0,
+      message: error instanceof Error ? error.message : 'YouTube extraction thất bại.',
+    };
+  }
+}
+
 export async function writeJobOutputToGoogleSheet(job: RunJob): Promise<SheetWritebackResolution> {
   const config = await loadWritebackConfig();
   if (!config.appScriptUrl.trim()) {
@@ -327,7 +526,7 @@ export async function writeJobOutputToGoogleSheet(job: RunJob): Promise<SheetWri
       };
     }
 
-    const updateResponse = await callAppsScript(config.appScriptUrl, {
+        const updateResponse = await callAppsScript(config.appScriptUrl, {
       token: config.appScriptToken,
       action: 'update_row',
       row: resolved.rowNumber,
@@ -335,6 +534,7 @@ export async function writeJobOutputToGoogleSheet(job: RunJob): Promise<SheetWri
         [resolved.outputColumn]: job.output,
       },
       expectedEmptyColumns: [resolved.outputColumn],
+      sheetUrl: job.source?.sheetUrl || config.sheetUrl,
     });
 
     return {

@@ -166,14 +166,21 @@ export function useResults() {
   }, []);
 
   const updateRuntimeJob = useCallback(async (runId: string, scriptId: string, patch: Partial<RunJob>) => {
-    const updatedRun = await runRepository.updateRunHistoryRun(runId, (run) => {
+    const applyPatch = (run: Run) => {
       const job = run.jobs.find((item) => item.scriptId === scriptId);
       if (!job) {
         return run;
       }
       Object.assign(job, patch);
+      run.updatedAt = new Date().toISOString();
       return run;
-    });
+    };
+
+    const updatedRun = await runRepository.updateRunHistoryRun(runId, applyPatch);
+    const activeRun = await runRepository.getActiveRun();
+    if (activeRun?.id === runId) {
+      await runRepository.updateActiveRun(applyPatch);
+    }
     if (updatedRun) {
       await runCalendarRepository.upsertFromRunWithBatchLookup(updatedRun);
     }

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { GoogleSheetsPage } from './pages/GoogleSheetsPage';
 import { ProfilesPage } from './pages/ProfilesPage';
 import { ResultsPage } from './pages/ResultsPage';
 import { RunCalendarPage } from './pages/RunCalendarPage';
@@ -8,6 +9,7 @@ import { ScriptsPage } from './pages/ScriptsPage';
 const sections = [
   { id: 'profiles', label: 'Profiles' },
   { id: 'scripts', label: 'Scripts' },
+  { id: 'google-sheets', label: 'Google Sheets' },
   { id: 'run', label: 'Run' },
   { id: 'results', label: 'Results' },
   { id: 'run-calendar', label: 'Run Calendar' },
@@ -42,6 +44,8 @@ export function DashboardApp() {
         return <ProfilesPage />;
       case 'scripts':
         return <ScriptsPage />;
+      case 'google-sheets':
+        return <GoogleSheetsPage />;
       case 'run':
         return <RunPage />;
       case 'results':
