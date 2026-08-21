@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createDefaultBatch, createDefaultScript } from '../../core/factories';
-import type { Script, ScriptBatch } from '../../core/models';
+import type { GoogleSheetConfig, Script, ScriptBatch } from '../../core/models';
 import { validateScriptBatch } from '../../core/validation';
-import { batchRepository } from '../../storage/repositories';
+import { batchRepository, googleSheetConfigRepository } from '../../storage/repositories';
 import { chromeStorageArea } from '../../storage/chrome-storage';
 import { STORAGE_KEYS } from '../../storage/keys';
 import { nowIso } from '../../shared/utils/time';
 import { createId } from '../../shared/utils/id';
-import { translateSheetVideoTitlesToVietnamese } from '../utils/sheet-writeback';
+import { extractYoutubeScriptsFromSheet, translateSheetVideoTitlesToVietnamese } from '../utils/sheet-writeback';
 
 const AUTOSAVE_DELAY_MS = 600;
 
@@ -21,10 +21,14 @@ export interface SheetImportFormState {
   outputColumn: string;
   translationSourceColumn: string;
   translationOutputColumn: string;
+  youtubeUrlColumn: string;
+  youtubeTitleOutputColumn: string;
+  youtubeTranscriptOutputColumn: string;
+  youtubeTranscriptTimestampColumn: string;
+  youtubePreferredLanguage: string;
   appScriptUrl: string;
   appScriptToken: string;
 }
-
 const DEFAULT_SHEET_IMPORT_FORM: SheetImportFormState = {
   sheetUrl: '',
   startRow: '3',
@@ -35,6 +39,11 @@ const DEFAULT_SHEET_IMPORT_FORM: SheetImportFormState = {
   outputColumn: 'I',
   translationSourceColumn: 'E',
   translationOutputColumn: 'D',
+  youtubeUrlColumn: 'B',
+  youtubeTitleOutputColumn: 'E',
+  youtubeTranscriptOutputColumn: 'H',
+  youtubeTranscriptTimestampColumn: 'I',
+  youtubePreferredLanguage: 'ja',
   appScriptUrl: '',
   appScriptToken: '',
 };
@@ -131,6 +140,11 @@ function normalizeImportFormState(value: Partial<SheetImportFormState> | null | 
     outputColumn: typeof value?.outputColumn === 'string' ? value.outputColumn : DEFAULT_SHEET_IMPORT_FORM.outputColumn,
     translationSourceColumn: typeof value?.translationSourceColumn === 'string' ? value.translationSourceColumn : DEFAULT_SHEET_IMPORT_FORM.translationSourceColumn,
     translationOutputColumn: typeof value?.translationOutputColumn === 'string' ? value.translationOutputColumn : DEFAULT_SHEET_IMPORT_FORM.translationOutputColumn,
+    youtubeUrlColumn: typeof value?.youtubeUrlColumn === 'string' ? value.youtubeUrlColumn : DEFAULT_SHEET_IMPORT_FORM.youtubeUrlColumn,
+    youtubeTitleOutputColumn: typeof value?.youtubeTitleOutputColumn === 'string' ? value.youtubeTitleOutputColumn : DEFAULT_SHEET_IMPORT_FORM.youtubeTitleOutputColumn,
+    youtubeTranscriptOutputColumn: typeof value?.youtubeTranscriptOutputColumn === 'string' ? value.youtubeTranscriptOutputColumn : DEFAULT_SHEET_IMPORT_FORM.youtubeTranscriptOutputColumn,
+    youtubeTranscriptTimestampColumn: typeof value?.youtubeTranscriptTimestampColumn === 'string' ? value.youtubeTranscriptTimestampColumn : DEFAULT_SHEET_IMPORT_FORM.youtubeTranscriptTimestampColumn,
+    youtubePreferredLanguage: typeof value?.youtubePreferredLanguage === 'string' ? value.youtubePreferredLanguage : DEFAULT_SHEET_IMPORT_FORM.youtubePreferredLanguage,
     appScriptUrl: typeof value?.appScriptUrl === 'string' ? value.appScriptUrl : DEFAULT_SHEET_IMPORT_FORM.appScriptUrl,
     appScriptToken: typeof value?.appScriptToken === 'string' ? value.appScriptToken : DEFAULT_SHEET_IMPORT_FORM.appScriptToken,
   };
@@ -180,7 +194,10 @@ export function useScriptBatch() {
   const [importMessage, setImportMessage] = useState<string>('');
   const [importingSheet, setImportingSheet] = useState(false);
   const [translatingSheetTitles, setTranslatingSheetTitles] = useState(false);
+  const [extractingYoutubeScripts, setExtractingYoutubeScripts] = useState(false);
   const [sheetImportForm, setSheetImportForm] = useState<SheetImportFormState>(DEFAULT_SHEET_IMPORT_FORM);
+  const [sheetConfigs, setSheetConfigs] = useState<GoogleSheetConfig[]>([]);
+  const [selectedSheetConfigId, setSelectedSheetConfigId] = useState<string>('');
   const saveTimerRef = useRef<number | null>(null);
   const hydratedRef = useRef(false);
 
@@ -198,14 +215,19 @@ export function useScriptBatch() {
 
   useEffect(() => {
     const load = async () => {
-      const [loadedBatches, savedSheetImportForm] = await Promise.all([
+      const [loadedBatches, savedSheetImportForm, savedSheetConfigs, savedSelectedSheetConfigId] = await Promise.all([
         batchRepository.getAll(),
         chromeStorageArea.getItem<SheetImportFormState>(STORAGE_KEYS.sheetImportForm, DEFAULT_SHEET_IMPORT_FORM),
+        googleSheetConfigRepository.getAll(),
+        googleSheetConfigRepository.getSelectedId(),
       ]);
       const nextBatches = loadedBatches.length > 0 ? loadedBatches : [await batchRepository.getOrCreateDefault()];
       setBatches(nextBatches);
       setSelectedBatchId(nextBatches[0]?.id ?? '');
       setSelectedScriptId(nextBatches[0]?.scripts[0]?.id ?? null);
+      const normalizedConfigs = Array.isArray(savedSheetConfigs) ? savedSheetConfigs : [];
+      setSheetConfigs(normalizedConfigs);
+      setSelectedSheetConfigId(savedSelectedSheetConfigId && normalizedConfigs.some((config) => config.id === savedSelectedSheetConfigId) ? savedSelectedSheetConfigId : (normalizedConfigs[0]?.id ?? ''));
       setSheetImportForm(normalizeImportFormState(savedSheetImportForm));
       setLoading(false);
       hydratedRef.current = true;
@@ -402,6 +424,26 @@ export function useScriptBatch() {
     setSheetImportForm((current) => ({ ...current, ...patch }));
   }, []);
 
+  const selectSheetConfig = useCallback(async (configId: string) => {
+    const latestConfigs = await googleSheetConfigRepository.getAll();
+    const config = latestConfigs.find((item) => item.id === configId);
+    setSheetConfigs(latestConfigs);
+    setSelectedSheetConfigId(configId);
+    await googleSheetConfigRepository.setSelectedId(configId);
+    if (!config) {
+      return;
+    }
+    const nextForm = normalizeImportFormState({
+      ...sheetImportForm,
+      sheetUrl: config.sheetUrl,
+      appScriptUrl: config.appScriptUrl,
+      appScriptToken: config.appScriptToken,
+    });
+    setSheetImportForm(nextForm);
+    await chromeStorageArea.setItem(STORAGE_KEYS.sheetImportForm, nextForm);
+    setImportMessage(`Đã chọn Google Sheet config: ${config.name}.`);
+  }, [sheetImportForm]);
+
   const saveSheetImportConfig = useCallback(async () => {
     const normalized = normalizeImportFormState(sheetImportForm);
     await chromeStorageArea.setItem(STORAGE_KEYS.sheetImportForm, normalized);
@@ -420,6 +462,20 @@ export function useScriptBatch() {
       setImportMessage(result.message);
     } finally {
       setTranslatingSheetTitles(false);
+    }
+  }, [sheetImportForm]);
+
+  const extractYoutubeScripts = useCallback(async () => {
+    setExtractingYoutubeScripts(true);
+    const normalized = normalizeImportFormState(sheetImportForm);
+    setImportMessage(`Đang xử lý YouTube URLs từ cột ${normalized.youtubeUrlColumn || 'B'}...`);
+    try {
+      await chromeStorageArea.setItem(STORAGE_KEYS.sheetImportForm, normalized);
+      setSheetImportForm(normalized);
+      const result = await extractYoutubeScriptsFromSheet(normalized);
+      setImportMessage(result.message);
+    } finally {
+      setExtractingYoutubeScripts(false);
     }
   }, [sheetImportForm]);
 
@@ -526,14 +582,19 @@ export function useScriptBatch() {
     importMessage,
     importingSheet,
     translatingSheetTitles,
+    extractingYoutubeScripts,
     sheetImportForm,
+    sheetConfigs,
+    selectedSheetConfigId,
     validation,
     setSelectedBatchId,
     setSelectedScriptId,
     setBatchName,
     updateSheetImportForm,
     saveSheetImportConfig,
+    selectSheetConfig,
     translateVideoTitlesToVietnamese,
+    extractYoutubeScripts,
     createBatch,
     deleteBatch,
     importFromGoogleSheet,

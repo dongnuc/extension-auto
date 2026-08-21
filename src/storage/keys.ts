@@ -5,6 +5,8 @@ export const STORAGE_KEYS = {
   runHistory: 'gemAutoFlow.runHistory',
   resultIndex: 'gemAutoFlow.resultIndex',
   sheetImportForm: 'gemAutoFlow.sheetImportForm',
+  sheetConfigs: 'gemAutoFlow.sheetConfigs',
+  selectedSheetConfigId: 'gemAutoFlow.selectedSheetConfigId',
   runCalendar: 'gemAutoFlow.runCalendar',
 } as const;
 

@@ -13,6 +13,7 @@ import {
 } from './run-executor';
 import { runtimeMessageTypes, type CollectOutputMode, type PingBackgroundResponse, type RunStatusResponse } from '../shared/messaging/contracts';
 import { runRepository } from '../storage/repositories';
+import { extractYoutubeTranscriptByTab } from './youtube-tab-extractor';
 import { nowIso } from '../shared/utils/time';
 
 async function resumeInterruptedRunIfNeeded(): Promise<void> {
@@ -62,7 +63,7 @@ async function getRunStatusResponse(): Promise<RunStatusResponse> {
   };
 }
 
-chrome.runtime.onMessage.addListener((message: { type?: string; runId?: string; scriptId?: string; text?: string; mode?: CollectOutputMode }, _sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((message: { type?: string; runId?: string; scriptId?: string; text?: string; mode?: CollectOutputMode; url?: string }, _sender, sendResponse) => {
   if (message.type === runtimeMessageTypes.pingBackground) {
     const response: PingBackgroundResponse = {
       ok: true,
@@ -138,6 +139,13 @@ chrome.runtime.onMessage.addListener((message: { type?: string; runId?: string; 
 
   if (message.type === runtimeMessageTypes.clearActiveRun) {
     void runRepository.saveActiveRun(null).then(() => sendResponse({ ok: true }));
+    return true;
+  }
+
+  if (message.type === runtimeMessageTypes.extractYoutubeTranscriptByTab) {
+    void extractYoutubeTranscriptByTab(message.url ?? '')
+      .then((data) => sendResponse({ ok: true, data }))
+      .catch((error: unknown) => sendResponse({ ok: false, message: error instanceof Error ? error.message : 'YOUTUBE_TAB_EXTRACTION_FAILED' }));
     return true;
   }
 
