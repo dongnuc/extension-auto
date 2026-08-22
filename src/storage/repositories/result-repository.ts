@@ -2,77 +2,24 @@ import type { JobResult, StageResult } from '../../core/models';
 import { chromeStorageArea } from '../chrome-storage';
 import { indexedDbClient, STORE_NAMES } from '../indexeddb';
 import { STORAGE_KEYS } from '../keys';
+import { getConfiguredUserSupabaseClient, throwSupabaseError } from './supabase-repository-utils';
 
-export interface ResultIndexEntry {
-  runId: string;
-  jobResultIds: string[];
-  stageResultIds: string[];
-}
+export interface ResultIndexEntry { runId: string; jobResultIds: string[]; stageResultIds: string[]; }
+
+function stageToRow(result: StageResult) { return { id: result.id, run_id: result.runId, job_id: result.jobId, stage_id: result.stageId, stage_name: result.stageName, input: result.input, response: result.response, started_at: result.startedAt, ended_at: result.endedAt, status: result.status, error_message: result.errorMessage, attempts: result.attempts }; }
+function rowToStage(row: Record<string, unknown>): StageResult { return { id: String(row.id), runId: String(row.run_id), jobId: String(row.job_id), stageId: String(row.stage_id), stageName: String(row.stage_name), input: String(row.input ?? ''), response: String(row.response ?? ''), startedAt: String(row.started_at), endedAt: row.ended_at as string | null, status: row.status as StageResult['status'], errorMessage: row.error_message as string | null, attempts: row.attempts as StageResult['attempts'] ?? [] }; }
+function jobToRow(result: JobResult) { return { id: result.id, run_id: result.runId, script_id: result.scriptId, output_stage_id: result.outputStageId, final_output: result.finalOutput, status: result.status, stage_result_ids: result.stageResultIds, started_at: result.startedAt, ended_at: result.endedAt, error_message: result.errorMessage }; }
+function rowToJob(row: Record<string, unknown>): JobResult { return { id: String(row.id), runId: String(row.run_id), scriptId: String(row.script_id), outputStageId: String(row.output_stage_id), finalOutput: String(row.final_output ?? ''), status: row.status as JobResult['status'], stageResultIds: row.stage_result_ids as string[] ?? [], startedAt: String(row.started_at), endedAt: row.ended_at as string | null, errorMessage: row.error_message as string | null }; }
 
 export class ResultRepository {
-  async getIndex(): Promise<ResultIndexEntry[]> {
-    return chromeStorageArea.getItem<ResultIndexEntry[]>(STORAGE_KEYS.resultIndex, []);
-  }
-
-  async saveStageResult(result: StageResult): Promise<void> {
-    await indexedDbClient.put(STORE_NAMES.stageResults, result);
-    await this.upsertIndex(result.runId, { stageResultId: result.id });
-  }
-
-  async saveJobResult(result: JobResult): Promise<void> {
-    await indexedDbClient.put(STORE_NAMES.jobResults, result);
-    await this.upsertIndex(result.runId, { jobResultId: result.id });
-  }
-
-  async getStageResult(id: string): Promise<StageResult | null> {
-    return indexedDbClient.get<StageResult>(STORE_NAMES.stageResults, id);
-  }
-
-  async getJobResult(id: string): Promise<JobResult | null> {
-    return indexedDbClient.get<JobResult>(STORE_NAMES.jobResults, id);
-  }
-
-  async getStageResultsByRun(runId: string): Promise<StageResult[]> {
-    const entry = (await this.getIndex()).find((item) => item.runId === runId);
-    if (!entry) {
-      return [];
-    }
-
-    const results = await Promise.all(entry.stageResultIds.map((id) => this.getStageResult(id)));
-    return results.filter((result): result is StageResult => Boolean(result));
-  }
-
-  async getJobResultsByRun(runId: string): Promise<JobResult[]> {
-    const entry = (await this.getIndex()).find((item) => item.runId === runId);
-    if (!entry) {
-      return [];
-    }
-
-    const results = await Promise.all(entry.jobResultIds.map((id) => this.getJobResult(id)));
-    return results.filter((result): result is JobResult => Boolean(result));
-  }
-
-  private async upsertIndex(runId: string, payload: { stageResultId?: string; jobResultId?: string }): Promise<void> {
-    const index = await this.getIndex();
-    const existing = index.find((entry) => entry.runId === runId);
-
-    if (existing) {
-      if (payload.stageResultId && !existing.stageResultIds.includes(payload.stageResultId)) {
-        existing.stageResultIds.push(payload.stageResultId);
-      }
-      if (payload.jobResultId && !existing.jobResultIds.includes(payload.jobResultId)) {
-        existing.jobResultIds.push(payload.jobResultId);
-      }
-    } else {
-      index.push({
-        runId,
-        stageResultIds: payload.stageResultId ? [payload.stageResultId] : [],
-        jobResultIds: payload.jobResultId ? [payload.jobResultId] : [],
-      });
-    }
-
-    await chromeStorageArea.setItem(STORAGE_KEYS.resultIndex, index);
-  }
+  async getIndex(): Promise<ResultIndexEntry[]> { return chromeStorageArea.getItem<ResultIndexEntry[]>(STORAGE_KEYS.resultIndex, []); }
+  async saveStageResult(result: StageResult): Promise<void> { const client = await getConfiguredUserSupabaseClient(); if (!client) { await indexedDbClient.put(STORE_NAMES.stageResults, result); await this.upsertIndex(result.runId, { stageResultId: result.id }); return; } throwSupabaseError((await client.from('stage_results').upsert(stageToRow(result))).error); }
+  async saveJobResult(result: JobResult): Promise<void> { const client = await getConfiguredUserSupabaseClient(); if (!client) { await indexedDbClient.put(STORE_NAMES.jobResults, result); await this.upsertIndex(result.runId, { jobResultId: result.id }); return; } throwSupabaseError((await client.from('job_results').upsert(jobToRow(result))).error); }
+  async getStageResult(id: string): Promise<StageResult | null> { const client = await getConfiguredUserSupabaseClient(); if (!client) return indexedDbClient.get<StageResult>(STORE_NAMES.stageResults, id); const { data, error } = await client.from('stage_results').select('*').eq('id', id).maybeSingle(); throwSupabaseError(error); return data ? rowToStage(data) : null; }
+  async getJobResult(id: string): Promise<JobResult | null> { const client = await getConfiguredUserSupabaseClient(); if (!client) return indexedDbClient.get<JobResult>(STORE_NAMES.jobResults, id); const { data, error } = await client.from('job_results').select('*').eq('id', id).maybeSingle(); throwSupabaseError(error); return data ? rowToJob(data) : null; }
+  async getStageResultsByRun(runId: string): Promise<StageResult[]> { const client = await getConfiguredUserSupabaseClient(); if (!client) { const entry = (await this.getIndex()).find((item) => item.runId === runId); if (!entry) return []; const results = await Promise.all(entry.stageResultIds.map((id) => this.getStageResult(id))); return results.filter((result): result is StageResult => Boolean(result)); } const { data, error } = await client.from('stage_results').select('*').eq('run_id', runId).order('started_at'); throwSupabaseError(error); return ((data ?? []) as Record<string, unknown>[]).map(rowToStage); }
+  async getJobResultsByRun(runId: string): Promise<JobResult[]> { const client = await getConfiguredUserSupabaseClient(); if (!client) { const entry = (await this.getIndex()).find((item) => item.runId === runId); if (!entry) return []; const results = await Promise.all(entry.jobResultIds.map((id) => this.getJobResult(id))); return results.filter((result): result is JobResult => Boolean(result)); } const { data, error } = await client.from('job_results').select('*').eq('run_id', runId).order('started_at'); throwSupabaseError(error); return ((data ?? []) as Record<string, unknown>[]).map(rowToJob); }
+  private async upsertIndex(runId: string, payload: { stageResultId?: string; jobResultId?: string }): Promise<void> { const index = await this.getIndex(); const existing = index.find((entry) => entry.runId === runId); if (existing) { if (payload.stageResultId && !existing.stageResultIds.includes(payload.stageResultId)) existing.stageResultIds.push(payload.stageResultId); if (payload.jobResultId && !existing.jobResultIds.includes(payload.jobResultId)) existing.jobResultIds.push(payload.jobResultId); } else { index.push({ runId, stageResultIds: payload.stageResultId ? [payload.stageResultId] : [], jobResultIds: payload.jobResultId ? [payload.jobResultId] : [] }); } await chromeStorageArea.setItem(STORAGE_KEYS.resultIndex, index); }
 }
 
 export const resultRepository = new ResultRepository();

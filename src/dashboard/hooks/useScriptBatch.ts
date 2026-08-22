@@ -13,6 +13,9 @@ const AUTOSAVE_DELAY_MS = 600;
 
 interface AppsScriptCellResult {
   displayValue?: string;
+  value?: unknown;
+  rawValue?: unknown;
+  formattedValue?: string;
 }
 
 interface AppsScriptRowResult {
@@ -261,6 +264,38 @@ function normalizeImportColumn(input: string): string {
   return input.trim().toUpperCase();
 }
 
+function getAdjacentColumn(column: string, offset: number): string | null {
+  const index = toColumnIndex(column);
+  if (index === null) {
+    return null;
+  }
+  let value = index + offset + 1;
+  if (value <= 0) {
+    return null;
+  }
+  let result = '';
+  while (value > 0) {
+    const remainder = (value - 1) % 26;
+    result = String.fromCharCode(65 + remainder) + result;
+    value = Math.floor((value - 1) / 26);
+  }
+  return result;
+}
+
+function getAppsScriptCellText(cell: AppsScriptCellResult | undefined): string {
+  const candidates = [cell?.value, cell?.rawValue, cell?.formattedValue, cell?.displayValue];
+  for (const candidate of candidates) {
+    if (candidate === null || candidate === undefined) {
+      continue;
+    }
+    const text = String(candidate).trim();
+    if (text) {
+      return text;
+    }
+  }
+  return '';
+}
+
 interface ImportedSheetRowsResult {
   rows: Array<{ rowNumber: number; cells: Record<string, string>; hasAnyData: boolean }>;
   source: 'apps-script' | 'csv';
@@ -285,8 +320,8 @@ async function readRowsViaAppsScript(config: SheetImportFormState, spreadsheetId
     source: 'apps-script',
     rows: (response.data ?? []).map((item) => ({
       rowNumber: item.row,
-      cells: Object.fromEntries(columns.map((column) => [column, (item.cells[column]?.displayValue ?? '').trim()])),
-      hasAnyData: Object.values(item.cells).some((cell) => Boolean(cell?.displayValue?.trim())),
+      cells: Object.fromEntries(columns.map((column) => [column, getAppsScriptCellText(item.cells[column])])),
+      hasAnyData: Object.values(item.cells).some((cell) => Boolean(getAppsScriptCellText(cell))),
     })),
   };
 }
@@ -639,7 +674,15 @@ export function useScriptBatch() {
       const normalizedContentColumn = normalizeImportColumn(contentColumn);
       const normalizedVideoTitleColumn = normalizeImportColumn(videoTitleColumn);
       const normalizedOutputColumn = normalizeImportColumn(outputColumn);
-      const columns = Array.from(new Set([normalizedTitleColumn, normalizedContentColumn, normalizedVideoTitleColumn]));
+      const contentCandidateColumns = [
+        normalizedContentColumn,
+        getAdjacentColumn(normalizedContentColumn, -1),
+        getAdjacentColumn(normalizedContentColumn, 1),
+        'G',
+        'H',
+        'I',
+      ].filter((column): column is string => Boolean(column));
+      const columns = Array.from(new Set([normalizedTitleColumn, normalizedContentColumn, normalizedVideoTitleColumn, ...contentCandidateColumns]));
 
       if (columns.some((column) => toColumnIndex(column) === null) || !normalizedOutputColumn) {
         setImportMessage('Không xác định được cột title/content/video/output. Có thể nhập dạng A, C, E, G hoặc số cột.');
@@ -647,18 +690,61 @@ export function useScriptBatch() {
       }
 
       let sheetRows = await readRowsViaAppsScript(normalizeImportFormState(sheetImportForm), spreadsheetId, startRow, endRow, columns);
+      if (sheetRows) {
+        try {
+          const csvRows = await readRowsViaCsv(spreadsheetId, sheetUrl, sheetName, startRow, endRow, columns);
+          const csvRowsByNumber = new Map(csvRows.rows.map((row) => [row.rowNumber, row]));
+          sheetRows = {
+            ...sheetRows,
+            rows: sheetRows.rows.map((row) => {
+              const csvRow = csvRowsByNumber.get(row.rowNumber);
+              if (!csvRow) {
+                return row;
+              }
+              const mergedCells = { ...row.cells };
+              for (const column of columns) {
+                const appScriptValue = mergedCells[column] ?? '';
+                const csvValue = csvRow.cells[column] ?? '';
+                if (csvValue.length > appScriptValue.length) {
+                  mergedCells[column] = csvValue;
+                }
+              }
+              return {
+                ...row,
+                cells: mergedCells,
+                hasAnyData: row.hasAnyData || csvRow.hasAnyData,
+              };
+            }),
+          };
+        } catch {
+          // Keep Apps Script data when CSV fallback is not available for private sheets.
+        }
+      }
       if (!sheetRows) {
         sheetRows = await readRowsViaCsv(spreadsheetId, sheetUrl, sheetName, startRow, endRow, columns);
       }
 
       const importedScripts: Script[] = [];
+      const importedRowNumbers = new Set<number>();
       let emptyContentRows = 0;
+      let autoRecoveredLongContentRows = 0;
       const normalizedSheetUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}`;
       for (const sheetRow of sheetRows.rows) {
         const rowNumber = sheetRow.rowNumber;
+        if (importedRowNumbers.has(rowNumber)) {
+          continue;
+        }
+        importedRowNumbers.add(rowNumber);
         const rawNumberNo = (sheetRow.cells[normalizedTitleColumn] ?? '').trim();
         const inferredNumberNo = rawNumberNo || null;
-        const content = (sheetRow.cells[normalizedContentColumn] ?? '').trim();
+        const configuredContent = (sheetRow.cells[normalizedContentColumn] ?? '').trim();
+        const longestContentCandidate = contentCandidateColumns
+          .map((column) => (sheetRow.cells[column] ?? '').trim())
+          .sort((left, right) => right.length - left.length)[0] ?? '';
+        const content = longestContentCandidate.length > configuredContent.length ? longestContentCandidate : configuredContent;
+        if (content.length > configuredContent.length) {
+          autoRecoveredLongContentRows += 1;
+        }
         const videoTitle = (sheetRow.cells[normalizedVideoTitleColumn] ?? '').trim();
         if (!content && (inferredNumberNo || videoTitle || sheetRow.hasAnyData)) {
           emptyContentRows += 1;
@@ -705,7 +791,7 @@ export function useScriptBatch() {
       setBatches((current) => [...current, importedBatch]);
       setSelectedBatchId(importedBatch.id);
       setSelectedScriptId(importedBatch.scripts[0]?.id ?? null);
-      setImportMessage(`Đã import ${importedScripts.length} script(s) từ Google Sheet${sheetName.trim() ? ` tab "${sheetName.trim()}"` : ''} vào batch ${importedBatch.name}. Nguồn đọc: ${sheetRows.source === 'apps-script' ? 'Apps Script read_rows (giữ đúng row thật)' : 'CSV fallback'}.${emptyContentRows > 0 ? ` Cảnh báo: ${emptyContentRows} row có content rỗng ở cột ${normalizedContentColumn}. Hãy kiểm tra Content column có đúng với sheet không.` : ''}`);
+      setImportMessage(`Đã import ${importedScripts.length} script(s) từ Google Sheet${sheetName.trim() ? ` tab "${sheetName.trim()}"` : ''} vào batch ${importedBatch.name}. Nguồn đọc: ${sheetRows.source === 'apps-script' ? 'Apps Script read_rows (giữ đúng row thật)' : 'CSV fallback'}.${autoRecoveredLongContentRows > 0 ? ` Đã tự dùng nội dung dài hơn từ cột lân cận/CSV cho ${autoRecoveredLongContentRows} row.` : ''}${emptyContentRows > 0 ? ` Cảnh báo: ${emptyContentRows} row có content rỗng ở cột ${normalizedContentColumn}. Hãy kiểm tra Content column có đúng với sheet không.` : ''}`);
     } catch (error) {
       setImportMessage(error instanceof Error ? error.message : 'Import Google Sheet thất bại.');
     } finally {

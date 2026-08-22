@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { AuthGate } from './components/AuthGate';
 import { GoogleSheetsPage } from './pages/GoogleSheetsPage';
 import { ProfilesPage } from './pages/ProfilesPage';
 import { ResultsPage } from './pages/ResultsPage';
@@ -58,7 +59,8 @@ export function DashboardApp() {
   }, [activeSection]);
 
   return (
-    <div className="shell" style={{ display: 'grid', gap: 20 }}>
+    <AuthGate>
+      <div className="shell" style={{ display: 'grid', gap: 20 }}>
       <header
         className="panel card"
         style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}
@@ -84,6 +86,7 @@ export function DashboardApp() {
         </nav>
       </header>
       {content}
-    </div>
+      </div>
+    </AuthGate>
   );
 }

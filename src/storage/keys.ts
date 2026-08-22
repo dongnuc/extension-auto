@@ -8,6 +8,7 @@ export const STORAGE_KEYS = {
   sheetConfigs: 'gemAutoFlow.sheetConfigs',
   selectedSheetConfigId: 'gemAutoFlow.selectedSheetConfigId',
   runCalendar: 'gemAutoFlow.runCalendar',
+  userSupabaseProjectConfig: 'gemAutoFlow.userSupabaseProjectConfig',
 } as const;
 
 export type StorageKey = (typeof STORAGE_KEYS)[keyof typeof STORAGE_KEYS];

@@ -4,7 +4,7 @@ const manifest = {
   description: 'Automate Gemini Gem processing flows for batched scripts.',
   version: '0.1.0',
   permissions: ['storage', 'tabs', 'downloads', 'scripting'],
-  host_permissions: ['https://gemini.google.com/*', 'https://docs.google.com/*', 'https://script.google.com/*', 'https://translate.googleapis.com/*', 'https://www.youtube.com/*', 'https://youtu.be/*'],
+  host_permissions: ['https://gemini.google.com/*', 'https://docs.google.com/*', 'https://script.google.com/*', 'https://translate.googleapis.com/*', 'https://www.youtube.com/*', 'https://youtu.be/*', 'https://*.supabase.co/*'],
   background: {
     service_worker: 'src/background/service-worker.ts',
     type: 'module',
