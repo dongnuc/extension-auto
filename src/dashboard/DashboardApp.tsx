@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { DashboardPage } from './pages/DashboardPage';
 import { GoogleSheetsPage } from './pages/GoogleSheetsPage';
 import { ProfilesPage } from './pages/ProfilesPage';
 import { ResultsPage } from './pages/ResultsPage';
@@ -7,19 +8,69 @@ import { RunPage } from './pages/RunPage';
 import { ScriptsPage } from './pages/ScriptsPage';
 
 const sections = [
-  { id: 'profiles', label: 'Profiles' },
-  { id: 'scripts', label: 'Scripts' },
-  { id: 'google-sheets', label: 'Google Sheets' },
-  { id: 'run', label: 'Run' },
-  { id: 'results', label: 'Results' },
-  { id: 'run-calendar', label: 'Run Calendar' },
+  {
+    id: 'dashboard',
+    label: 'Dashboard',
+    icon: '⌂',
+    eyebrow: 'MVP Foundation',
+    title: 'Automation Control Center',
+    description: 'Manage Gemini Gem profiles, prepare script batches, configure runs, and review results from one workspace.',
+  },
+  {
+    id: 'profiles',
+    label: 'Profiles',
+    icon: '◉',
+    eyebrow: 'Configuration',
+    title: 'Gemini Profiles',
+    description: 'Create and maintain Gemini Gem profiles, stage settings, and output behavior.',
+  },
+  {
+    id: 'scripts',
+    label: 'Scripts',
+    icon: '▦',
+    eyebrow: 'Preparation',
+    title: 'Scripts and Batches',
+    description: 'Prepare script batches, import prompts, and organize stages before launching automation.',
+  },
+  {
+    id: 'google-sheets',
+    label: 'Google Sheets',
+    icon: '▤',
+    eyebrow: 'Import',
+    title: 'Google Sheets',
+    description: 'Configure sheet sources and imports while preserving the existing Google Sheets workflow.',
+  },
+  {
+    id: 'run',
+    label: 'Run',
+    icon: '▶',
+    eyebrow: 'Runtime',
+    title: 'Run Automation',
+    description: 'Configure and launch Gemini Auto Flow runs using existing profiles, batches, and data sources.',
+  },
+  {
+    id: 'results',
+    label: 'Results',
+    icon: '✓',
+    eyebrow: 'Review',
+    title: 'Results',
+    description: 'Review automation outputs, runtime artifacts, write-back status, and saved run details.',
+  },
+  {
+    id: 'run-calendar',
+    label: 'Run Calendar',
+    icon: '◷',
+    eyebrow: 'History',
+    title: 'Run Calendar',
+    description: 'Inspect run history and calendar-oriented runtime records.',
+  },
 ] as const;
 
 type SectionId = (typeof sections)[number]['id'];
 
 function getSectionFromHash(): SectionId {
   const hash = window.location.hash.replace(/^#\/?/, '');
-  return sections.some((section) => section.id === hash) ? hash as SectionId : 'profiles';
+  return sections.some((section) => section.id === hash) ? hash as SectionId : 'dashboard';
 }
 
 function navigateToSection(sectionId: SectionId): void {
@@ -33,13 +84,17 @@ export function DashboardApp() {
     const onHashChange = () => setActiveSection(getSectionFromHash());
     window.addEventListener('hashchange', onHashChange);
     if (!window.location.hash) {
-      navigateToSection('profiles');
+      navigateToSection('dashboard');
     }
     return () => window.removeEventListener('hashchange', onHashChange);
   }, []);
 
+  const activeMetadata = sections.find((section) => section.id === activeSection) ?? sections[0];
+
   const content = useMemo(() => {
     switch (activeSection) {
+      case 'dashboard':
+        return <DashboardPage />;
       case 'profiles':
         return <ProfilesPage />;
       case 'scripts':
@@ -58,32 +113,41 @@ export function DashboardApp() {
   }, [activeSection]);
 
   return (
-    <div className="shell" style={{ display: 'grid', gap: 20 }}>
-      <header
-        className="panel card"
-        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}
-      >
-        <div>
-          <span className="badge">MVP Foundation</span>
-          <h1 style={{ margin: '14px 0 6px', fontSize: 28 }}>Gemini Gem Auto Flow Dashboard</h1>
-          <p style={{ margin: 0, maxWidth: 780, color: '#aabbd6' }}>
-            Manage Gemini Gem profiles, prepare script batches, configure runs, and review results from one workspace.
-          </p>
+    <div className="app-shell">
+      <aside className="sidebar" aria-label="Dashboard navigation">
+        <div className="sidebar-brand">
+          <span className="sidebar-brand-mark">G</span>
+          <span>Gemini Auto Flow</span>
         </div>
-        <nav style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+
+        <nav className="sidebar-nav">
+          <div className="sidebar-group-label">Workspace</div>
           {sections.map((section) => (
             <button
               key={section.id}
-              className={`button ${activeSection === section.id ? '' : 'secondary'}`}
+              className={`sidebar-item ${activeSection === section.id ? 'active' : ''}`}
               onClick={() => navigateToSection(section.id)}
               type="button"
             >
-              {section.label}
+              <span className="sidebar-icon" aria-hidden="true">{section.icon}</span>
+              <span>{section.label}</span>
             </button>
           ))}
         </nav>
-      </header>
-      {content}
+
+        <div className="sidebar-footer">Dark Automation System</div>
+      </aside>
+
+      <main className="main-shell">
+        <header className="page-header">
+          <div>
+            <p className="page-eyebrow">{activeMetadata.eyebrow}</p>
+            <h1 className="page-title">{activeMetadata.title}</h1>
+            <p className="page-description">{activeMetadata.description}</p>
+          </div>
+        </header>
+        {content}
+      </main>
     </div>
   );
 }
