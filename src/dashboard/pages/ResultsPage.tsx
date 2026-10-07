@@ -49,6 +49,15 @@ const cellTextareaStyle: React.CSSProperties = {
 
 const DEFAULT_MANUAL_SUBMIT_TEXT = 'từ tiêu đề này hãy viết mô tả (220 ký tự trong đó phải đảm bảo phải viết được keywords chính) tag + hag tag';
 
+function getStatusBadgeClass(status: string): string {
+  const normalized = status === 'launching' || status === 'submitted' ? 'running' : status === 'stopped' ? 'warning' : status;
+  return `status-badge ${normalized}`;
+}
+
+function hasVietnameseText(value: string): boolean {
+  return /[ăâđêôơưáàảãạấầẩẫậắằẳẵặéèẻẽẹếềểễệíìỉĩịóòỏõọốồổỗộớờởỡợúùủũụứừửữựýỳỷỹỵ]/i.test(value);
+}
+
 export function ResultsPage() {
   const {
     runs,
@@ -155,9 +164,9 @@ export function ResultsPage() {
   }
 
   return (
-    <div style={{ display: 'grid', gap: 20 }}>
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(300px, 360px) minmax(320px, 440px) minmax(0, 1fr)', gap: 20, alignItems: 'start' }}>
-        <section className="panel card" style={{ display: 'grid', gap: 14 }}>
+    <div className="section-stack">
+      <div className="master-detail-grid master-detail-grid--results">
+        <section className="panel card section-stack">
           <div>
             <h2 className="section-title">Runs</h2>
             <p className="section-subtitle">Select a run to inspect saved job results and runtime launch records.</p>
@@ -169,14 +178,15 @@ export function ResultsPage() {
                 <div key={run.id} className="panel" style={{ borderRadius: 16, padding: 12, display: 'grid', gap: 8 }}>
                   <button
                     type="button"
-                    className={`button ${isActive ? '' : 'secondary'}`}
+                    className={`button secondary ${isActive ? 'is-selected' : ''}`}
                     onClick={() => setSelectedRunId(run.id)}
                     style={{ textAlign: 'left', display: 'grid', gap: 6, padding: 14 }}
                   >
                     <strong>{run.profileSnapshot.name}</strong>
-                    <span style={{ fontSize: 12, color: '#bfd2f5' }}>Run ID: {run.id}</span>
-                    <span style={{ fontSize: 12, color: '#9fb1cd' }}>
-                      Status: {run.status} · Jobs saved: {jobResults.length}/{run.jobs.length}
+                      <span style={{ fontSize: 12, color: '#bfd2f5' }}>Run ID: {run.id}</span>
+                    <span style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                      <span className={getStatusBadgeClass(run.status)}>{run.status}</span>
+                      <span style={{ fontSize: 12, color: '#9fb1cd' }}>Jobs saved: {jobResults.length}/{run.jobs.length}</span>
                     </span>
                     <span style={{ fontSize: 12, color: '#9fb1cd' }}>Started: {formatDate(run.createdAt)}</span>
                   </button>
@@ -189,7 +199,7 @@ export function ResultsPage() {
           </div>
         </section>
 
-        <section className="panel card" style={{ display: 'grid', gap: 14 }}>
+        <section className="panel card section-stack">
           <div>
             <h2 className="section-title">Job Results</h2>
             <p className="section-subtitle">Final outputs for each script in the selected run.</p>
@@ -200,7 +210,7 @@ export function ResultsPage() {
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 }}>
                 <div className="panel" style={{ borderRadius: 14, padding: 12 }}>
                   <div style={{ fontSize: 12, color: '#9fb1cd' }}>Run status</div>
-                  <strong>{selectedRunBundle.run.status}</strong>
+                  <span className={getStatusBadgeClass(selectedRunBundle.run.status)}>{selectedRunBundle.run.status}</span>
                 </div>
                 <div className="panel" style={{ borderRadius: 14, padding: 12 }}>
                   <div style={{ fontSize: 12, color: '#9fb1cd' }}>Jobs</div>
@@ -223,12 +233,12 @@ export function ResultsPage() {
                     <button
                       key={jobResult.id}
                       type="button"
-                      className={`button ${isActive ? '' : 'secondary'}`}
+                      className={`button secondary ${isActive ? 'is-selected' : ''}`}
                       onClick={() => setSelectedJobResultId(jobResult.id)}
                       style={{ textAlign: 'left', display: 'grid', gap: 6, padding: 14 }}
                     >
                       <strong>{jobResult.scriptId}</strong>
-                      <span style={{ fontSize: 12, color: '#bfd2f5' }}>Status: {jobResult.status}</span>
+                      <span className={getStatusBadgeClass(jobResult.status)} style={{ width: 'fit-content' }}>{jobResult.status}</span>
                       <span style={{ fontSize: 12, color: '#9fb1cd' }}>
                         Final output: {jobResult.finalOutput ? trimText(jobResult.finalOutput, 90) : 'No output yet'}
                       </span>
@@ -241,7 +251,7 @@ export function ResultsPage() {
           ) : null}
         </section>
 
-        <section className="panel card" style={{ display: 'grid', gap: 16 }}>
+        <section className="panel card section-stack">
           <div>
             <h2 className="section-title">Result Detail</h2>
             <p className="section-subtitle">View final output and each stage response for the selected script.</p>
@@ -266,7 +276,7 @@ export function ResultsPage() {
                   <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                     <button
                       type="button"
-                      className="button"
+                      className="button secondary"
                       onClick={() => copyText(selectedJobResult.finalOutput, `Copied final output for ${selectedJobResult.scriptId}.`)}
                       disabled={!selectedJobResult.finalOutput}
                     >
@@ -277,7 +287,7 @@ export function ResultsPage() {
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 10 }}>
                   <div>
                     <div style={{ fontSize: 12, color: '#9fb1cd' }}>Status</div>
-                    <strong>{selectedJobResult.status}</strong>
+                    <span className={getStatusBadgeClass(selectedJobResult.status)}>{selectedJobResult.status}</span>
                   </div>
                   <div>
                     <div style={{ fontSize: 12, color: '#9fb1cd' }}>Started</div>
@@ -306,7 +316,7 @@ export function ResultsPage() {
                         <strong>{stageResult.stageName}</strong>
                       </div>
                       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                        <span className="badge">{stageResult.status}</span>
+                        <span className={getStatusBadgeClass(stageResult.status)}>{stageResult.status}</span>
                         <button
                           type="button"
                           className="button secondary"
@@ -352,7 +362,7 @@ export function ResultsPage() {
             <p className="section-subtitle">Manage runtime records here. Current tab URL is the real conversation URL, and output is only collected when you click the button.</p>
           </div>
           {selectedRunBundle ? (
-            <button type="button" className="button" onClick={() => addRuntimeJob(selectedRunBundle.run.id)}>
+            <button type="button" className="button secondary" onClick={() => addRuntimeJob(selectedRunBundle.run.id)}>
               Add row
             </button>
           ) : null}
@@ -421,7 +431,7 @@ export function ResultsPage() {
                                 {job.source?.videoTitle ? <div style={{ color: '#bfdbfe', fontSize: 12 }}>Video title: {job.source.videoTitle}</div> : null}
                               </div>
                               <div style={{ display: 'grid', gap: 8 }}>
-                                <span className="badge" style={{ width: 'fit-content' }}>{job.status}</span>
+                                <span className={getStatusBadgeClass(job.status)} style={{ width: 'fit-content' }}>{job.status}</span>
                                 <select style={cellInputStyle} value={job.status} onChange={(event) => void updateRuntimeJob(runId, job.scriptId, { status: event.target.value as JobStatus })}>
                                   <option value="pending">pending</option>
                                   <option value="launching">launching</option>
@@ -451,6 +461,10 @@ export function ResultsPage() {
                               <div style={{ color: '#bfd0ea', fontSize: 12, paddingTop: 10 }}>{formatDate(job.submittedAt)}</div>
                               <div style={{ display: 'grid', gap: 8 }}>
                                 <textarea style={cellTextareaStyle} value={job.output} rows={5} onChange={(event) => void updateRuntimeJob(runId, job.scriptId, { output: event.target.value })} />
+                                <div className="badge" style={{ width: 'fit-content' }}>{job.output.length} chars</div>
+                                {(collectModeByJob[`${runId}:${job.scriptId}`] ?? 'japanese-scripts') === 'japanese-scripts' && hasVietnameseText(job.output) ? (
+                                  <div style={{ color: '#fbbf24', fontSize: 11 }}>Phát hiện tiếng Việt trong output Japanese scripts only.</div>
+                                ) : null}
                                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                                   <button type="button" className="button secondary" onClick={() => setOutputModal({ runId, scriptId: job.scriptId, title: `${job.scriptId} · ${job.scriptTitle}`, content: job.output || '' })}>View output</button>
                                   <button type="button" className="button secondary" onClick={() => void copyText(job.output, `Copied output for ${job.scriptId}.`)} disabled={!job.output}>Copy output</button>

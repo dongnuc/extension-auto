@@ -7,6 +7,11 @@ function formatDate(value: string): string {
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
 }
 
+function getStatusBadgeClass(status: string): string {
+  const normalized = status === 'launching' || status === 'submitted' ? 'running' : status === 'stopped' ? 'warning' : status;
+  return `status-badge ${normalized}`;
+}
+
 export function RunCalendarPage() {
   const { entries, loading, message, deleteEntry, recoverEntry } = useRunCalendar();
   const [detailEntry, setDetailEntry] = useState<RunCalendarEntry | null>(null);
@@ -20,8 +25,8 @@ export function RunCalendarPage() {
   }
 
   return (
-    <div style={{ display: 'grid', gap: 20 }}>
-      <section className="panel card" style={{ display: 'grid', gap: 16 }}>
+    <div className="section-stack">
+      <section className="panel card section-stack">
         <div>
           <h2 className="section-title">Run Calendar</h2>
           <p className="section-subtitle">Simple calendar of runs. This keeps NumberNo and generated profile links even when detailed run rows are deleted from Results.</p>
@@ -37,38 +42,36 @@ export function RunCalendarPage() {
           </div>
         ) : (
           <div style={{ overflowX: 'auto', maxHeight: '72vh', overflowY: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: '0 10px', minWidth: 920 }}>
+            <table className="data-table" style={{ minWidth: 920 }}>
               <thead>
-                <tr style={{ textAlign: 'left' }}>
-                  <th style={{ padding: '8px 10px', color: '#9fb1cd', fontSize: 12 }}>Run time</th>
-                  <th style={{ padding: '8px 10px', color: '#9fb1cd', fontSize: 12 }}>Profile</th>
-                  <th style={{ padding: '8px 10px', color: '#9fb1cd', fontSize: 12 }}>Status</th>
-                  <th style={{ padding: '8px 10px', color: '#9fb1cd', fontSize: 12 }}>Scripts</th>
-                  <th style={{ padding: '8px 10px', color: '#9fb1cd', fontSize: 12 }}>Run ID</th>
-                  <th style={{ padding: '8px 10px', color: '#9fb1cd', fontSize: 12 }}>Actions</th>
+                <tr>
+                  <th>Run time</th>
+                  <th>Profile</th>
+                  <th>Status</th>
+                  <th>Scripts</th>
+                  <th>Run ID</th>
+                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {entries.map((entry) => (
                   <tr key={entry.runId}>
-                    <td colSpan={6} style={{ padding: 0 }}>
-                      <div className="panel" style={{ borderRadius: 16, padding: 12, display: 'grid', gridTemplateColumns: '1.1fr 1fr 0.7fr 0.7fr 1.4fr 1fr', gap: 12, alignItems: 'center' }}>
-                        <div style={{ color: '#bfd0ea', fontSize: 13 }}>{formatDate(entry.createdAt)}</div>
-                        <strong>{entry.profileName || '—'}</strong>
-                        <span className="badge" style={{ width: 'fit-content' }}>{entry.status}</span>
-                        <div style={{ color: '#bfd0ea', fontSize: 13 }}>{entry.items.length}</div>
-                        <div style={{ color: '#9fb1cd', fontSize: 12, wordBreak: 'break-all' }}>{entry.runId}</div>
-                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                          <button type="button" className="button" onClick={() => setDetailEntry(entry)}>
-                            View detail
-                          </button>
-                          <button type="button" className="button" onClick={() => void recoverEntry(entry.runId)}>
-                            Recover to Results
-                          </button>
-                          <button type="button" className="button secondary" onClick={() => void deleteEntry(entry.runId)}>
-                            Delete
-                          </button>
-                        </div>
+                    <td>{formatDate(entry.createdAt)}</td>
+                    <td><strong>{entry.profileName || '—'}</strong></td>
+                    <td><span className={getStatusBadgeClass(entry.status)}>{entry.status}</span></td>
+                    <td>{entry.items.length}</td>
+                    <td style={{ wordBreak: 'break-all' }}>{entry.runId}</td>
+                    <td>
+                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                        <button type="button" className="button secondary" onClick={() => setDetailEntry(entry)}>
+                          View detail
+                        </button>
+                        <button type="button" className="button secondary" onClick={() => void recoverEntry(entry.runId)}>
+                          Recover to Results
+                        </button>
+                        <button type="button" className="button secondary" onClick={() => void deleteEntry(entry.runId)}>
+                          Delete
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -104,42 +107,38 @@ export function RunCalendarPage() {
             </div>
 
             <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: '64vh' }}>
-              <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: '0 8px', minWidth: 760 }}>
+              <table className="data-table" style={{ minWidth: 760 }}>
                 <thead>
-                  <tr style={{ textAlign: 'left' }}>
-                    <th style={{ padding: '8px 10px', color: '#9fb1cd', fontSize: 12 }}>NumberNo</th>
-                    <th style={{ padding: '8px 10px', color: '#9fb1cd', fontSize: 12 }}>Script title</th>
-                    <th style={{ padding: '8px 10px', color: '#9fb1cd', fontSize: 12 }}>Profile link</th>
-                    <th style={{ padding: '8px 10px', color: '#9fb1cd', fontSize: 12 }}>Generated link</th>
-                    <th style={{ padding: '8px 10px', color: '#9fb1cd', fontSize: 12 }}>Row</th>
-                    <th style={{ padding: '8px 10px', color: '#9fb1cd', fontSize: 12 }}>Status</th>
+                  <tr>
+                    <th>NumberNo</th>
+                    <th>Script title</th>
+                    <th>Profile link</th>
+                    <th>Generated link</th>
+                    <th>Row</th>
+                    <th>Status</th>
                   </tr>
                 </thead>
                 <tbody>
                   {detailEntry.items.map((item) => (
                     <tr key={item.scriptId}>
-                      <td colSpan={6} style={{ padding: 0 }}>
-                        <div className="panel" style={{ borderRadius: 14, padding: 12, display: 'grid', gridTemplateColumns: '0.9fr 1.3fr 1.3fr 1.5fr 0.5fr 0.7fr', gap: 12, alignItems: 'start' }}>
-                          <strong>{item.numberNo || '—'}</strong>
-                          <div style={{ color: '#bfd0ea', fontSize: 13 }}>{item.scriptTitle || '—'}</div>
-                          <div>
-                            {item.profileUrl ? (
-                              <a href={item.profileUrl} target="_blank" rel="noreferrer" style={{ color: '#60a5fa', textDecoration: 'underline', wordBreak: 'break-all', fontSize: 13 }}>
-                                Open profile
-                              </a>
-                            ) : <span style={{ color: '#9fb1cd', fontSize: 12 }}>—</span>}
-                          </div>
-                          <div>
-                            {item.generatedUrl ? (
-                              <a href={item.generatedUrl} target="_blank" rel="noreferrer" style={{ color: '#60a5fa', textDecoration: 'underline', wordBreak: 'break-all', fontSize: 13 }}>
-                                {item.generatedUrl}
-                              </a>
-                            ) : <span style={{ color: '#9fb1cd', fontSize: 12 }}>—</span>}
-                          </div>
-                          <div style={{ color: '#bfd0ea', fontSize: 13 }}>{item.rowNumber ?? '—'}</div>
-                          <span className="badge" style={{ width: 'fit-content' }}>{item.status}</span>
-                        </div>
+                      <td><strong>{item.numberNo || '—'}</strong></td>
+                      <td>{item.scriptTitle || '—'}</td>
+                      <td>
+                        {item.profileUrl ? (
+                          <a href={item.profileUrl} target="_blank" rel="noreferrer" style={{ wordBreak: 'break-all' }}>
+                            Open profile
+                          </a>
+                        ) : <span style={{ color: '#9fb1cd', fontSize: 12 }}>—</span>}
                       </td>
+                      <td>
+                        {item.generatedUrl ? (
+                          <a href={item.generatedUrl} target="_blank" rel="noreferrer" style={{ wordBreak: 'break-all' }}>
+                            {item.generatedUrl}
+                          </a>
+                        ) : <span style={{ color: '#9fb1cd', fontSize: 12 }}>—</span>}
+                      </td>
+                      <td>{item.rowNumber ?? '—'}</td>
+                      <td><span className={getStatusBadgeClass(item.status)}>{item.status}</span></td>
                     </tr>
                   ))}
                 </tbody>

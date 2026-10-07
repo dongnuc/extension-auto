@@ -121,6 +121,12 @@ a {
   color: var(--text-primary);
 }
 
+.button.secondary.is-selected {
+  background: var(--bg-selected);
+  border-color: rgba(96, 165, 250, 0.38);
+  color: var(--text-primary);
+}
+
 .button.ghost {
   background: transparent;
   border-color: var(--border-default);
@@ -388,6 +394,10 @@ a {
   grid-template-columns: minmax(220px, 0.7fr) minmax(260px, 0.85fr) minmax(0, 1.45fr);
   gap: var(--space-4);
   align-items: start;
+}
+
+.master-detail-grid--results {
+  grid-template-columns: minmax(260px, 0.7fr) minmax(300px, 0.85fr) minmax(0, 1.45fr);
 }
 
 .data-table {
