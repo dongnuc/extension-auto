@@ -138,7 +138,7 @@ export function ResultsPage() {
                   </button>
                   <div className="results-run-card-side">
                     <span className={getStatusBadgeClass(run.status)}>{run.status}</span>
-                    <button type="button" className="icon-button" onClick={() => deleteRun(run.id)} title="Delete run">×</button>
+                    <button type="button" className="icon-button" onClick={() => deleteRun(run.id)} title="Delete run" aria-label="Delete run">×</button>
                   </div>
                 </article>
               );
