@@ -14,8 +14,8 @@ interface ScriptListProps {
 
 export function ScriptList({ scripts, selectedScriptId, batchName, onSelect, onAdd, onDuplicate, onDelete, onToggleEnabled, onMove }: ScriptListProps) {
   return (
-    <section className="panel card" style={{ display: 'grid', gap: 16 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+    <section className="panel card section-stack script-list-panel">
+      <div className="section-toolbar">
         <div>
           <h2 className="section-title">Scripts</h2>
           <p className="section-subtitle">Manage scripts inside batch: {batchName}.</p>
@@ -25,37 +25,34 @@ export function ScriptList({ scripts, selectedScriptId, batchName, onSelect, onA
         </button>
       </div>
 
-      <div style={{ display: 'grid', gap: 10, maxHeight: '70vh', overflowY: 'auto', paddingRight: 4 }}>
-        {scripts.map((script, index) => {
+      <div className="compact-list scroll-list">
+        {scripts.length === 0 ? (
+          <div className="empty-state compact-empty">
+            <h3>No scripts yet</h3>
+            <p>Add a script manually or import rows from Google Sheets.</p>
+          </div>
+        ) : scripts.map((script, index) => {
           const selected = script.id === selectedScriptId;
           return (
             <button
               key={script.id}
               type="button"
-              className="button ghost"
+              className={`selectable-card ${selected ? 'selected' : ''}`}
               onClick={() => onSelect(script.id)}
-              style={{
-                textAlign: 'left',
-                padding: 14,
-                borderRadius: 16,
-                background: selected ? 'rgba(37, 99, 235, 0.18)' : 'rgba(2, 6, 23, 0.32)',
-                display: 'grid',
-                gap: 8,
-              }}
             >
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center' }}>
+              <div className="selectable-card-header">
                 <div>
                   <strong>{script.title || `Script ${index + 1}`}</strong>
-                  <div style={{ color: '#9fb1cd', fontSize: 13 }}>NumberNo: {script.numberNo || script.id || '—'}</div>
-                  <div style={{ color: '#9fb1cd', fontSize: 13 }}>Batch: {batchName}</div>
+                  <span>NumberNo: {script.numberNo || script.id || '—'}</span>
+                  <span>Batch: {batchName}</span>
                 </div>
-                <span className="badge">{script.enabled ? 'Enabled' : 'Disabled'}</span>
+                <span className={`status-badge ${script.enabled ? 'enabled' : 'disabled'}`}>{script.enabled ? 'Enabled' : 'Disabled'}</span>
               </div>
-              <div style={{ color: '#bfd0ea', fontSize: 13 }}>
-                {script.content.length} chars
-                {script.source ? ` · Sheet row ${script.source.sourceRowNumber} · output ${script.source.outputColumn}` : ''}
+              <div className="meta-row">
+                <span>{script.content.length} chars</span>
+                {script.source ? <span>Sheet row {script.source.sourceRowNumber} · output {script.source.outputColumn}</span> : null}
               </div>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <div className="action-row compact-actions">
                 <button className="button ghost" type="button" onClick={(event) => { event.stopPropagation(); onMove(script.id, 'up'); }} disabled={index === 0}>
                   Up
                 </button>
@@ -89,7 +86,7 @@ export function ScriptList({ scripts, selectedScriptId, batchName, onSelect, onA
         })}
       </div>
 
-      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+      <div className="action-row">
         <button className="button secondary" onClick={onDuplicate} type="button">Duplicate</button>
       </div>
     </section>

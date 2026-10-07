@@ -32,7 +32,7 @@ export function RunPreviewPanel({ profile, batch, selectedScriptIds, activeRun }
   const selectedScripts = batch?.scripts.filter((script) => selectedScriptIds.includes(script.id)) ?? [];
 
   return (
-    <section className="panel card" style={{ display: 'grid', gap: 18 }}>
+    <section className="panel card section-stack run-preview-panel">
       <div>
         <h2 className="section-title">Launch preview</h2>
         <p className="section-subtitle">Preview the profile URL and the browser tabs that will be opened when you submit the selected scripts.</p>
@@ -56,14 +56,14 @@ export function RunPreviewPanel({ profile, batch, selectedScriptIds, activeRun }
         {activeRun?.progress.lastError ? <div><strong>Current error:</strong> {activeRun.progress.lastError}</div> : null}
       </div>
 
-      <div className="panel" style={{ borderRadius: 16, padding: 14, display: 'grid', gap: 6 }}>
+      <div className="panel card nested-section compact-info-card">
         <strong>How this run works</strong>
         <div style={{ color: '#bfd0ea', fontSize: 13 }}>- The extension opens one Gemini tab per selected script.</div>
         <div style={{ color: '#bfd0ea', fontSize: 13 }}>- It inserts the script content once and sends it immediately.</div>
         <div style={{ color: '#bfd0ea', fontSize: 13 }}>- Tabs stay open after submission for manual inspection and later output handling.</div>
       </div>
 
-      <div style={{ display: 'grid', gap: 12, maxHeight: '52vh', overflowY: 'auto', paddingRight: 4 }}>
+      <div className="compact-list scroll-list launch-queue-list">
         <div>
           <h3 className="section-title">Tab launch queue</h3>
         </div>
@@ -74,14 +74,8 @@ export function RunPreviewPanel({ profile, batch, selectedScriptIds, activeRun }
           return (
             <article
               key={script.id}
-              style={{
-                border: '1px solid rgba(148, 163, 184, 0.16)',
-                borderRadius: 16,
-                padding: 14,
-                background: isCurrent ? 'rgba(37, 99, 235, 0.16)' : getJobStatusColor(jobStatus),
-                display: 'grid',
-                gap: 6,
-              }}
+              className="launch-queue-card"
+              style={{ background: isCurrent ? 'rgba(37, 99, 235, 0.16)' : getJobStatusColor(jobStatus) }}
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
                 <strong>{index + 1}. {script.title}</strong>

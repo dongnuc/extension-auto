@@ -72,21 +72,21 @@ export function RunConfigPanel({
   const [detailScript, setDetailScript] = useState<Script | null>(null);
 
   return (
-    <section className="panel card" style={{ display: 'grid', gap: 18 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
+    <section className="panel card section-stack run-config-panel">
+      <div className="section-toolbar align-start">
         <div>
           <h2 className="section-title">Run configuration</h2>
           <p className="section-subtitle">Choose one profile URL and open one tab per selected script. Each tab will submit once and remain open.</p>
         </div>
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+        <div className="action-row">
           <button className="button secondary" onClick={onSelectAllScripts} type="button">
             Select All
           </button>
           <button className="button secondary" onClick={onClearAllScripts} type="button">
             Clear All
           </button>
-          <button className="button" onClick={onStartRun} type="button">
-            Open Tabs and Submit Scripts
+              <button className="button" onClick={onStartRun} type="button">
+            Start Run
           </button>
         </div>
       </div>
@@ -123,7 +123,7 @@ export function RunConfigPanel({
         </select>
       </div>
 
-      <div className="panel" style={{ borderRadius: 16, padding: 14, display: 'grid', gap: 6 }}>
+      <div className="panel card nested-section compact-info-card">
         <strong>Launch behavior</strong>
         <div style={{ color: '#bfd0ea', fontSize: 13 }}>- One selected script = one browser tab.</div>
         <div style={{ color: '#bfd0ea', fontSize: 13 }}>- The extension will input and send the script once.</div>
@@ -135,20 +135,11 @@ export function RunConfigPanel({
           <h3 className="section-title">Scripts in batch</h3>
           <p className="section-subtitle">Batch: {batch?.name ?? '—'}. Only enabled scripts are shown as selectable run inputs.</p>
         </div>
-        <div style={{ display: 'grid', gap: 10, maxHeight: '42vh', overflowY: 'auto', paddingRight: 4 }}>
+        <div className="compact-list scroll-list run-script-list">
           {batch?.scripts.map((script) => (
             <label
               key={script.id}
-              style={{
-                display: 'flex',
-                alignItems: 'flex-start',
-                gap: 12,
-                padding: 14,
-                borderRadius: 16,
-                border: '1px solid rgba(148, 163, 184, 0.16)',
-                background: script.enabled ? 'rgba(15, 23, 42, 0.48)' : 'rgba(15, 23, 42, 0.18)',
-                opacity: script.enabled ? 1 : 0.55,
-              }}
+              className={`run-script-option ${script.enabled ? '' : 'disabled'}`}
             >
               <input
                 type="checkbox"
@@ -188,7 +179,7 @@ export function RunConfigPanel({
       ) : null}
 
       {activeRun ? (
-        <div className="panel card" style={{ padding: 16, borderRadius: 16, display: 'grid', gap: 12 }}>
+        <div className="panel card section-stack run-state-card">
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
             <div>
               <strong>Launch state</strong>

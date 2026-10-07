@@ -548,6 +548,221 @@ a {
   font-size: 13px;
 }
 
+.section-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.section-toolbar.align-start {
+  align-items: flex-start;
+}
+
+.action-row {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.action-row.align-center {
+  align-items: center;
+}
+
+.compact-actions .button {
+  padding: 7px 10px;
+  font-size: 12px;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--space-3);
+}
+
+.form-grid.compact {
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+}
+
+.form-grid.two-column {
+  grid-template-columns: repeat(2, minmax(120px, 180px));
+}
+
+.narrow-field {
+  max-width: 420px;
+}
+
+.profiles-layout {
+  align-items: start;
+}
+
+.google-sheets-layout,
+.scripts-editor-grid {
+  align-items: start;
+}
+
+.run-split-layout {
+  display: grid;
+  grid-template-columns: minmax(320px, 460px) minmax(0, 1fr);
+  gap: var(--space-4);
+  align-items: start;
+}
+
+.compact-list {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.scroll-list {
+  max-height: 70vh;
+  overflow-y: auto;
+  padding-right: var(--space-1);
+}
+
+.selectable-card {
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  background: var(--bg-surface-2);
+  color: var(--text-primary);
+  padding: var(--space-4);
+  display: grid;
+  gap: var(--space-3);
+  cursor: pointer;
+}
+
+.selectable-card:hover {
+  border-color: var(--border-hover);
+  background: var(--bg-hover);
+}
+
+.selectable-card.selected {
+  border-color: rgba(96, 165, 250, 0.42);
+  background: rgba(22, 53, 103, 0.62);
+}
+
+.selectable-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.selectable-card-header strong,
+.selectable-card-header span {
+  display: block;
+}
+
+.selectable-card-header strong {
+  color: var(--text-primary);
+  margin-bottom: var(--space-1);
+}
+
+.selectable-card-header span {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.meta-row {
+  display: flex;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.meta-row.vertical {
+  display: grid;
+  gap: var(--space-1);
+  word-break: break-all;
+}
+
+.compact-empty {
+  padding: var(--space-6);
+  text-align: left;
+}
+
+.compact-empty p {
+  margin-left: 0;
+}
+
+.nested-section,
+.stage-card,
+.import-step-list .step-item,
+.config-step-list .step-item {
+  background: var(--bg-surface-2);
+}
+
+.stage-card-list {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.stage-card {
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  display: grid;
+  gap: var(--space-3);
+}
+
+.compact-info-card {
+  padding: var(--space-4);
+  display: grid;
+  gap: 6px;
+}
+
+.run-script-list {
+  max-height: 42vh;
+}
+
+.run-script-option {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-default);
+  background: rgba(16, 30, 50, 0.72);
+}
+
+.run-script-option.disabled {
+  opacity: 0.55;
+}
+
+.run-state-card {
+  padding: var(--space-4);
+}
+
+.launch-queue-list {
+  max-height: 52vh;
+}
+
+.launch-queue-card {
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  display: grid;
+  gap: 6px;
+}
+
+.helper-text {
+  margin: var(--space-1) 0 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.helper-text.strong {
+  color: var(--text-primary);
+}
+
+.import-wizard-panel .step-list,
+.config-wizard-panel .step-list {
+  gap: var(--space-4);
+}
+
 @media (max-width: 1080px) {
   .app-shell {
     grid-template-columns: 1fr;
@@ -565,7 +780,8 @@ a {
 
   .metric-grid,
   .master-detail-grid,
-  .split-grid {
+  .split-grid,
+  .run-split-layout {
     grid-template-columns: 1fr 1fr;
   }
 }
@@ -582,7 +798,9 @@ a {
 
   .metric-grid,
   .master-detail-grid,
-  .split-grid {
+  .split-grid,
+  .run-split-layout,
+  .form-grid.two-column {
     grid-template-columns: 1fr;
   }
 }

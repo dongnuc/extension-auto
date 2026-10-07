@@ -25,7 +25,7 @@ export function ProfilesPage() {
   }
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(280px, 360px) minmax(0, 1fr)', gap: 20, alignItems: 'start' }}>
+    <div className="split-grid profiles-layout">
       <ProfileList
         profiles={profiles}
         selectedProfileId={selectedProfileId}

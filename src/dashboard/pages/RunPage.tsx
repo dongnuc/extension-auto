@@ -42,7 +42,7 @@ export function RunPage() {
   }
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(320px, 460px) minmax(0, 1fr)', gap: 20, alignItems: 'start' }}>
+    <div className="run-split-layout">
       <RunConfigPanel
         profiles={enabledProfiles}
         batches={batches}

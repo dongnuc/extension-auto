@@ -96,8 +96,8 @@ export function ProfileEditor({ profile, onChange, onSave }: ProfileEditorProps)
   };
 
   return (
-    <section className="panel card" style={{ display: 'grid', gap: 20 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
+    <section className="panel card section-stack profile-editor-panel">
+      <div className="section-toolbar align-start">
         <div>
           <h2 className="section-title">Profile editor</h2>
           <p className="section-subtitle">Configure the Gemini Gem URL, stages, output stage, and export options.</p>
@@ -107,7 +107,7 @@ export function ProfileEditor({ profile, onChange, onSave }: ProfileEditorProps)
         </button>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14 }}>
+      <div className="form-grid">
         <div className="field">
           <label htmlFor="profile-id">Profile ID</label>
           <input id="profile-id" value={profile.id} onChange={(event) => setField('id', event.target.value)} />
@@ -133,7 +133,7 @@ export function ProfileEditor({ profile, onChange, onSave }: ProfileEditorProps)
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14 }}>
+      <div className="form-grid">
         <div className="field">
           <label htmlFor="profile-enabled">Availability</label>
           <select
@@ -192,7 +192,7 @@ export function ProfileEditor({ profile, onChange, onSave }: ProfileEditorProps)
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14 }}>
+      <div className="form-grid">
         <div className="field">
           <label htmlFor="profile-max-retries">Profile retry count</label>
           <input

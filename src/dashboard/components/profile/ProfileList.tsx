@@ -18,8 +18,8 @@ export function ProfileList({
   onDelete,
 }: ProfileListProps) {
   return (
-    <section className="panel card" style={{ display: 'grid', gap: 16 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+    <section className="panel card section-stack profile-list-panel">
+      <div className="section-toolbar">
         <div>
           <h2 className="section-title">Gem Profiles</h2>
           <p className="section-subtitle">Create and manage reusable Gemini Gem automation flows.</p>
@@ -29,38 +29,38 @@ export function ProfileList({
         </button>
       </div>
 
-      <div style={{ display: 'grid', gap: 10 }}>
-        {profiles.map((profile) => {
+      <div className="compact-list">
+        {profiles.length === 0 ? (
+          <div className="empty-state compact-empty">
+            <h3>No profiles yet</h3>
+            <p>Create a Gemini profile to define stages, output, and export options.</p>
+          </div>
+        ) : profiles.map((profile) => {
           const selected = selectedProfileId === profile.id;
           return (
             <button
               key={profile.id}
               type="button"
               onClick={() => onSelect(profile.id)}
-              className="button ghost"
-              style={{
-                textAlign: 'left',
-                padding: 16,
-                borderRadius: 16,
-                background: selected ? 'rgba(37, 99, 235, 0.18)' : 'rgba(2, 6, 23, 0.32)',
-              }}
+              className={`selectable-card ${selected ? 'selected' : ''}`}
             >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+              <div className="selectable-card-header">
                 <div>
-                  <strong style={{ display: 'block', marginBottom: 6 }}>{profile.name}</strong>
-                  <span style={{ color: '#9fb1cd', fontSize: 13 }}>{profile.id}</span>
+                  <strong>{profile.name}</strong>
+                  <span>{profile.id}</span>
                 </div>
-                <span className="badge">{profile.enabled ? 'Enabled' : 'Disabled'}</span>
+                <span className={`status-badge ${profile.enabled ? 'enabled' : 'disabled'}`}>{profile.enabled ? 'Enabled' : 'Disabled'}</span>
               </div>
-              <div style={{ marginTop: 10, color: '#bfd0ea', fontSize: 13 }}>
-                {profile.stages.length} stage(s) • Output: {profile.outputStageId}
+              <div className="meta-row">
+                <span>{profile.stages.length} stage(s)</span>
+                <span>Output: {profile.outputStageId}</span>
               </div>
             </button>
           );
         })}
       </div>
 
-      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+      <div className="action-row">
         <button className="button secondary" onClick={onDuplicate} type="button">
           Duplicate
         </button>

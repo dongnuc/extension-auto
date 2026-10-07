@@ -30,8 +30,8 @@ export function ScriptEditor({
   }
 
   return (
-    <section className="panel card" style={{ display: 'grid', gap: 20 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
+    <section className="panel card section-stack script-editor-panel">
+      <div className="section-toolbar align-start">
         <div>
           <h2 className="section-title">Script batch editor</h2>
           <p className="section-subtitle">Manage scripts by batch name. Autosaves after changes. Status: {saveState}</p>
@@ -54,7 +54,7 @@ export function ScriptEditor({
         </div>
       ) : null}
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14 }}>
+      <div className="form-grid">
         <div className="field">
           <label htmlFor="script-number-no">NumberNo</label>
           <input id="script-number-no" value={selectedScript.numberNo ?? ''} onChange={(event) => onUpdateScript({ numberNo: event.target.value })} />

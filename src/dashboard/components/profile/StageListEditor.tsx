@@ -22,13 +22,13 @@ export function StageListEditor({
   onSelectOutput,
 }: StageListEditorProps) {
   return (
-    <section className="panel card" style={{ display: 'grid', gap: 16 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+    <section className="panel card section-stack nested-section">
+      <div className="section-toolbar">
         <div>
           <h3 className="section-title">Stages</h3>
           <p className="section-subtitle">Define the prompts that run sequentially inside the same Gemini Gem conversation.</p>
         </div>
-        <div style={{ display: 'flex', gap: 10 }}>
+        <div className="action-row">
           <button className="button secondary" onClick={() => onAddStage('script')} type="button">
             Add Script Stage
           </button>
@@ -38,25 +38,15 @@ export function StageListEditor({
         </div>
       </div>
 
-      <div style={{ display: 'grid', gap: 14 }}>
+      <div className="stage-card-list">
         {stages.map((stage, index) => (
-          <article
-            key={stage.id}
-            style={{
-              border: '1px solid rgba(148, 163, 184, 0.16)',
-              borderRadius: 18,
-              padding: 16,
-              background: 'rgba(15, 23, 42, 0.55)',
-              display: 'grid',
-              gap: 14,
-            }}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <article key={stage.id} className="stage-card">
+            <div className="section-toolbar">
               <div>
                 <strong>{stage.name || `Stage ${index + 1}`}</strong>
                 <div style={{ color: '#9fb1cd', fontSize: 13 }}>{stage.id}</div>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <div className="action-row align-center">
                 <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13 }}>
                   <input
                     checked={outputStageId === stage.id}
@@ -83,7 +73,7 @@ export function StageListEditor({
               </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
+            <div className="form-grid compact">
               <div className="field">
                 <label htmlFor={`stage-name-${stage.id}`}>Stage name</label>
                 <input
