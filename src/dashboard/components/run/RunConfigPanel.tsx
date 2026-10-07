@@ -58,14 +58,18 @@ export function RunConfigPanel({
   onPauseRun,
   onResumeRun,
   onStopRun,
+  onRetryCurrentStage,
   onRetryCurrentJob,
+  onSkipCurrentScript,
   onResetRunState,
   onClearActiveRun,
 }: RunConfigPanelProps) {
   const canPause = activeRun?.status === 'running' || activeRun?.status === 'queued';
   const canResume = activeRun?.status === 'paused';
   const canStop = activeRun ? ['queued', 'running', 'paused'].includes(activeRun.status) : false;
+  const canRetryStage = activeRun ? ['failed', 'stopped'].includes(activeRun.status) : false;
   const canRetryJob = activeRun ? ['failed', 'completed', 'stopped'].includes(activeRun.status) : false;
+  const canSkipScript = activeRun ? ['queued', 'running', 'paused', 'failed'].includes(activeRun.status) : false;
   const canReset = Boolean(activeRun);
   const canClear = activeRun ? !['queued', 'running', 'paused'].includes(activeRun.status) : true;
   const progressPercent = activeRun ? getProgressPercent(activeRun) : 0;
@@ -195,8 +199,14 @@ export function RunConfigPanel({
               <button className="button secondary" onClick={onStopRun} type="button" disabled={!canStop}>
                 Stop New Tabs
               </button>
+              <button className="button secondary" onClick={onRetryCurrentStage} type="button" disabled={!canRetryStage}>
+                Retry Current Stage
+              </button>
               <button className="button secondary" onClick={onRetryCurrentJob} type="button" disabled={!canRetryJob}>
                 Retry Current Launch
+              </button>
+              <button className="button secondary" onClick={onSkipCurrentScript} type="button" disabled={!canSkipScript}>
+                Skip Current Script
               </button>
               <button className="button secondary" onClick={onResetRunState} type="button" disabled={!canReset}>
                 Reset Run State
