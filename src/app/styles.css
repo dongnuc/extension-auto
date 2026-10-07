@@ -819,7 +819,6 @@ a {
   flex-wrap: wrap;
 }
 
-.action-row,
 .results-script-actions {
   display: flex;
   gap: var(--space-2);
