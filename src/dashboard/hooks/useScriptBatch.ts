@@ -483,13 +483,14 @@ export function useScriptBatch() {
     });
   }, [selectedScript, updateBatch]);
 
-  const deleteScript = useCallback(() => {
-    if (!selectedScriptId) {
+  const deleteScript = useCallback((scriptId?: string) => {
+    const targetScriptId = scriptId ?? selectedScriptId;
+    if (!targetScriptId) {
       return;
     }
 
     updateBatch((current) => {
-      const remaining = current.scripts.filter((script) => script.id !== selectedScriptId);
+      const remaining = current.scripts.filter((script) => script.id !== targetScriptId);
       const fallbackScript = remaining[0] ?? createDefaultScript(0);
       const normalizedScripts = (remaining.length > 0 ? remaining : [fallbackScript]).map((script, order) => ({
         ...script,

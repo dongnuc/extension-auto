@@ -6,6 +6,7 @@ import { writeJobOutputToGoogleSheet } from '../utils/sheet-writeback';
 
 interface ResultRunBundle {
   run: Run;
+  batchName: string;
   jobResults: JobResult[];
   stageResults: StageResult[];
 }
@@ -17,6 +18,7 @@ export function useResults() {
   const [selectedRunId, setSelectedRunId] = useState<string>('');
   const [selectedJobResultId, setSelectedJobResultId] = useState<string>('');
   const [copyMessage, setCopyMessage] = useState<string>('');
+  const [deleteMessage, setDeleteMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [writingBackJobIds, setWritingBackJobIds] = useState<string[]>([]);
 
@@ -69,6 +71,7 @@ export function useResults() {
 
         return {
           run: enrichedRun,
+          batchName: batch?.name ?? run.batchId,
           jobResults: jobResults.sort((left, right) => left.startedAt.localeCompare(right.startedAt)),
           stageResults: stageResults.sort((left, right) => left.startedAt.localeCompare(right.startedAt)),
         } satisfies ResultRunBundle;
@@ -221,24 +224,59 @@ export function useResults() {
   }, [loadResults]);
 
   const deleteRuntimeJob = useCallback(async (runId: string, scriptId: string) => {
-    await runRepository.updateRunHistoryRun(runId, (run) => {
-      run.jobs = run.jobs.filter((job) => job.scriptId !== scriptId).map((job, index) => ({ ...job, order: index }));
-      run.progress.totalJobs = run.jobs.length;
-      run.progress.submittedJobs = run.jobs.filter((job) => ['submitted', 'completed'].includes(job.status)).length;
-      run.progress.failedJobs = run.jobs.filter((job) => job.status === 'failed').length;
-      run.progress.stoppedJobs = run.jobs.filter((job) => job.status === 'stopped').length;
-      return run;
-    });
-    await loadResults();
+    setDeleteMessage(null);
+    try {
+      const mutateRun = (run: Run) => {
+        const previousLength = run.jobs.length;
+        run.jobs = run.jobs.filter((job) => job.scriptId !== scriptId).map((job, index) => ({ ...job, order: index }));
+        if (run.jobs.length === previousLength) {
+          return run;
+        }
+        run.progress.totalJobs = run.jobs.length;
+        run.progress.submittedJobs = run.jobs.filter((job) => ['submitted', 'completed'].includes(job.status)).length;
+        run.progress.failedJobs = run.jobs.filter((job) => job.status === 'failed').length;
+        run.progress.stoppedJobs = run.jobs.filter((job) => job.status === 'stopped').length;
+        return run;
+      };
+
+      const historyRun = await runRepository.updateRunHistoryRun(runId, mutateRun);
+      const activeRun = await runRepository.getActiveRun();
+      let activeUpdated = false;
+      if (activeRun?.id === runId) {
+        mutateRun(activeRun);
+        await runRepository.saveActiveRun(activeRun);
+        activeUpdated = true;
+      }
+      if (!historyRun && !activeUpdated) {
+        throw new Error(`Không tìm thấy run ${runId} trong lịch sử hoặc active run.`);
+      }
+      setDeleteMessage({ type: 'success', text: `Đã xóa job ${scriptId}.` });
+    } catch (error) {
+      setDeleteMessage({ type: 'error', text: error instanceof Error ? error.message : 'Không thể xóa job.' });
+    } finally {
+      await loadResults();
+    }
   }, [loadResults]);
 
   const deleteRun = useCallback(async (runId: string) => {
-    const run = runs.find((bundle) => bundle.run.id === runId)?.run ?? null;
-    if (run) {
+    setDeleteMessage(null);
+    try {
+      const run = runs.find((bundle) => bundle.run.id === runId)?.run ?? null;
+      if (!run) {
+        throw new Error(`Không tìm thấy run ${runId} để xóa.`);
+      }
       await runCalendarRepository.upsertFromRunWithBatchLookup(run);
+      await runRepository.deleteRunHistoryRun(runId);
+      const activeRun = await runRepository.getActiveRun();
+      if (activeRun?.id === runId) {
+        await runRepository.saveActiveRun(null);
+      }
+      setDeleteMessage({ type: 'success', text: `Đã xóa run ${runId}.` });
+    } catch (error) {
+      setDeleteMessage({ type: 'error', text: error instanceof Error ? error.message : 'Không thể xóa run.' });
+    } finally {
+      await loadResults();
     }
-    await runRepository.deleteRunHistoryRun(runId);
-    await loadResults();
   }, [loadResults, runs]);
 
   const collectScripts = useCallback(async (runId: string, scriptId: string, mode: CollectOutputMode = 'japanese-scripts') => {
@@ -321,6 +359,7 @@ export function useResults() {
     selectedStageResults,
     runtimeJobs,
     copyMessage,
+    deleteMessage,
     writingBackJobIds,
     setSelectedRunId,
     setSelectedJobResultId,

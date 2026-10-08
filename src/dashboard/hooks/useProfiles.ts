@@ -60,6 +60,21 @@ export function useProfiles() {
     setSelectedProfileId(newProfile.id);
   }, []);
 
+  const persistProfile = useCallback(async (profile: GemProfile): Promise<SaveProfileResult> => {
+    const validation = validateProfile(profile);
+    if (!validation.isValid) {
+      return { ok: false, message: 'Please fix validation errors before saving.' };
+    }
+
+    await profileRepository.save(profile);
+    const persisted = await profileRepository.getAll();
+    setProfiles(persisted);
+    setSelectedProfileId(profile.id);
+    return { ok: true };
+  }, []);
+
+  const createAndPersistProfile = useCallback(async (profile: GemProfile): Promise<SaveProfileResult> => persistProfile(profile), [persistProfile]);
+
   const duplicateProfile = useCallback(() => {
     if (!selectedProfile) {
       return;
@@ -70,17 +85,27 @@ export function useProfiles() {
     setSelectedProfileId(duplicate.id);
   }, [selectedProfile]);
 
+  const deleteProfileById = useCallback(async (profileId: string) => {
+    await profileRepository.delete(profileId);
+    const remaining = await profileRepository.getAll();
+    if (remaining.length === 0) {
+      const defaultProfile = createDefaultProfile();
+      await profileRepository.save(defaultProfile);
+      setProfiles([defaultProfile]);
+      setSelectedProfileId(defaultProfile.id);
+      return;
+    }
+    setProfiles(remaining);
+    setSelectedProfileId((current) => current === profileId ? (remaining[0]?.id ?? null) : current);
+  }, []);
+
   const deleteProfile = useCallback(() => {
     if (!selectedProfileId) {
       return;
     }
 
-    setProfiles((current) => {
-      const remaining = current.filter((profile) => profile.id !== selectedProfileId);
-      setSelectedProfileId(remaining[0]?.id ?? null);
-      return remaining.length > 0 ? remaining : [createDefaultProfile()];
-    });
-  }, [selectedProfileId]);
+    void deleteProfileById(selectedProfileId);
+  }, [deleteProfileById, selectedProfileId]);
 
   const saveProfiles = useCallback(async () => {
     for (const profile of profiles) {
@@ -117,8 +142,11 @@ export function useProfiles() {
     setSelectedProfileId,
     updateSelectedProfile,
     createProfile,
+    createAndPersistProfile,
+    persistProfile,
     duplicateProfile,
     deleteProfile,
+    deleteProfileById,
     persistSelectedProfile,
   };
 }

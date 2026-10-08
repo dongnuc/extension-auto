@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { GoogleSheetConfig } from '../../core/models';
 import { googleSheetConfigRepository } from '../../storage/repositories';
 
@@ -15,11 +15,14 @@ const EMPTY_CONFIG: GoogleSheetConfig = {
 export function GoogleSheetsPage() {
   const [configs, setConfigs] = useState<GoogleSheetConfig[]>([]);
   const [selectedId, setSelectedId] = useState('');
-  const [draft, setDraft] = useState<GoogleSheetConfig>(EMPTY_CONFIG);
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(true);
-
-  const selectedConfig = useMemo(() => configs.find((config) => config.id === selectedId) ?? null, [configs, selectedId]);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [createDraft, setCreateDraft] = useState<GoogleSheetConfig>(EMPTY_CONFIG);
+  const [createMessage, setCreateMessage] = useState('');
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editDraft, setEditDraft] = useState<GoogleSheetConfig>(EMPTY_CONFIG);
+  const [editMessage, setEditMessage] = useState('');
 
   const loadConfigs = useCallback(async () => {
     const [loadedConfigs, loadedSelectedId] = await Promise.all([
@@ -31,7 +34,6 @@ export function GoogleSheetsPage() {
       : (loadedConfigs[0]?.id ?? '');
     setConfigs(loadedConfigs);
     setSelectedId(nextSelectedId);
-    setDraft(loadedConfigs.find((config) => config.id === nextSelectedId) ?? EMPTY_CONFIG);
     setLoading(false);
   }, []);
 
@@ -39,48 +41,85 @@ export function GoogleSheetsPage() {
     void loadConfigs();
   }, [loadConfigs]);
 
-  const selectConfig = useCallback(async (configId: string) => {
-    const config = configs.find((item) => item.id === configId) ?? null;
-    setSelectedId(configId);
-    setDraft(config ?? EMPTY_CONFIG);
-    await googleSheetConfigRepository.setSelectedId(configId);
-  }, [configs]);
-
-  const createConfig = useCallback(async () => {
-    setSelectedId('');
-    setDraft(EMPTY_CONFIG);
-    await googleSheetConfigRepository.setSelectedId('');
-    setMessage('Form đã được làm trống. Nhập thông tin rồi bấm Save config để thêm mới.');
+  const openEditModal = useCallback(async (config: GoogleSheetConfig) => {
+    const nextDraft = { ...config };
+    setSelectedId(config.id);
+    setEditDraft(nextDraft);
+    setEditMessage('');
+    await googleSheetConfigRepository.setSelectedId(config.id);
+    setIsEditModalOpen(true);
   }, []);
 
-  const saveConfig = useCallback(async () => {
-    if (!draft.name.trim()) {
-      setMessage('Vui lòng nhập tên config.');
+  const closeEditModal = useCallback(() => {
+    setIsEditModalOpen(false);
+    setEditMessage('');
+  }, []);
+
+  const openCreateModal = useCallback(() => {
+    setCreateDraft(EMPTY_CONFIG);
+    setCreateMessage('');
+    setIsCreateModalOpen(true);
+  }, []);
+
+  const closeCreateModal = useCallback(() => {
+    setIsCreateModalOpen(false);
+    setCreateMessage('');
+  }, []);
+
+  const saveCreateConfig = useCallback(async () => {
+    if (!createDraft.name.trim()) {
+      setCreateMessage('Vui lòng nhập tên config.');
       return;
     }
-    if (!draft.sheetUrl.trim() || !draft.appScriptUrl.trim()) {
-      setMessage('Vui lòng nhập Google Sheet link và Apps Script Web App URL.');
+    if (!createDraft.sheetUrl.trim() || !createDraft.appScriptUrl.trim()) {
+      setCreateMessage('Vui lòng nhập Google Sheet link và Apps Script Web App URL.');
       return;
     }
     const saved = await googleSheetConfigRepository.save({
-      ...draft,
-      name: draft.name.trim(),
-      sheetUrl: draft.sheetUrl.trim(),
-      sheetName: draft.sheetName.trim(),
-      appScriptUrl: draft.appScriptUrl.trim(),
-      appScriptToken: draft.appScriptToken.trim(),
+      ...createDraft,
+      id: '',
+      name: createDraft.name.trim(),
+      sheetUrl: createDraft.sheetUrl.trim(),
+      sheetName: createDraft.sheetName.trim(),
+      appScriptUrl: createDraft.appScriptUrl.trim(),
+      appScriptToken: createDraft.appScriptToken.trim(),
     });
+    await googleSheetConfigRepository.setSelectedId(saved.id);
     await loadConfigs();
     setSelectedId(saved.id);
-    setDraft(saved);
-    setMessage(`Đã lưu config: ${saved.name}.`);
-  }, [draft, loadConfigs]);
+    setMessage(`Đã tạo config: ${saved.name}.`);
+    closeCreateModal();
+  }, [closeCreateModal, createDraft, loadConfigs]);
 
-  const deleteConfig = useCallback(async () => {
-    if (!selectedId) {
+  const saveEditConfig = useCallback(async () => {
+    if (!editDraft.name.trim()) {
+      setEditMessage('Vui lòng nhập tên config.');
       return;
     }
-    await googleSheetConfigRepository.delete(selectedId);
+    if (!editDraft.sheetUrl.trim() || !editDraft.appScriptUrl.trim()) {
+      setEditMessage('Vui lòng nhập Google Sheet link và Apps Script Web App URL.');
+      return;
+    }
+    const saved = await googleSheetConfigRepository.save({
+      ...editDraft,
+      name: editDraft.name.trim(),
+      sheetUrl: editDraft.sheetUrl.trim(),
+      sheetName: editDraft.sheetName.trim(),
+      appScriptUrl: editDraft.appScriptUrl.trim(),
+      appScriptToken: editDraft.appScriptToken.trim(),
+    });
+    await googleSheetConfigRepository.setSelectedId(saved.id);
+    await loadConfigs();
+    setSelectedId(saved.id);
+    setMessage(`Đã cập nhật config: ${saved.name}.`);
+    closeEditModal();
+  }, [closeEditModal, editDraft, loadConfigs]);
+
+  const deleteConfigById = useCallback(async (configId: string) => {
+    await googleSheetConfigRepository.delete(configId);
+    if (selectedId === configId) {
+      await googleSheetConfigRepository.setSelectedId('');
+    }
     await loadConfigs();
     setMessage('Đã xóa Google Sheet config.');
   }, [loadConfigs, selectedId]);
@@ -94,6 +133,7 @@ export function GoogleSheetsPage() {
   }
 
   return (
+    <> 
     <div className="split-grid google-sheets-layout">
       <section className="panel card section-stack config-list-panel">
         <div className="section-toolbar">
@@ -101,71 +141,183 @@ export function GoogleSheetsPage() {
             <h2 className="section-title">Google Sheets</h2>
             <p className="section-subtitle">Manage reusable Sheet/App Script configs.</p>
           </div>
-          <button className="button" type="button" onClick={() => void createConfig()}>Add</button>
-        </div>
-        <div className="compact-list scroll-list">
-          {configs.length === 0 ? (
-            <div className="empty-state compact-empty">
-              <h3>Chưa có config nào</h3>
-              <p>Bấm Add để tạo Google Sheet config đầu tiên.</p>
-            </div>
-          ) : configs.map((config) => (
-            <button key={config.id} className={`selectable-card ${selectedId === config.id ? 'selected' : ''}`} type="button" onClick={() => void selectConfig(config.id)}>
-              <div className="selectable-card-header">
-                <div>
-                  <strong>{config.name || '(No name)'}</strong>
-                  <span>Sheet name: {config.sheetName || 'Default first sheet'}</span>
-                </div>
-                {selectedId === config.id ? <span className="status-badge running">Selected</span> : null}
-              </div>
-              <div className="meta-row vertical">
-                <span>Sheet: {config.sheetUrl || 'No Google Sheet link'}</span>
-                <span>Apps Script: {config.appScriptUrl || 'No Web App URL'}</span>
-              </div>
-            </button>
-          ))}
-        </div>
-      </section>
-
-      <section className="panel card section-stack config-wizard-panel">
-        <div className="section-toolbar align-start">
-          <div>
-            <h2 className="section-title">Config detail</h2>
-            <p className="section-subtitle">Scripts page will select and use configs from this list.</p>
-          </div>
-          {message ? <span className="badge">{message}</span> : null}
-        </div>
-
-        <div className="step-list config-step-list">
-          <div className="step-item">
-            <strong>Connect Sheet</strong>
-            <span>Name the config and connect it to a Google Sheet URL and optional tab name.</span>
-            <div className="form-grid">
-              <div className="field"><label htmlFor="sheet-config-detail-name">Config name</label><input id="sheet-config-detail-name" value={draft.name} onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))} placeholder="VD: Main production sheet" /></div>
-              <div className="field"><label htmlFor="sheet-config-detail-url">Google Sheet link</label><input id="sheet-config-detail-url" value={draft.sheetUrl} onChange={(event) => setDraft((current) => ({ ...current, sheetUrl: event.target.value }))} placeholder="https://docs.google.com/spreadsheets/d/..." /></div>
-              <div className="field"><label htmlFor="sheet-config-detail-name-tab">Sheet name / tab name</label><input id="sheet-config-detail-name-tab" value={draft.sheetName} onChange={(event) => setDraft((current) => ({ ...current, sheetName: event.target.value }))} placeholder="VD: Tháng 8, Sheet1, Mùa Mưa" /></div>
-            </div>
-          </div>
-          <div className="step-item">
-            <strong>Apps Script</strong>
-            <span>Provide the Apps Script Web App endpoint used for write-back and helper actions.</span>
-            <div className="field"><label htmlFor="sheet-config-detail-app-script">Apps Script Web App URL</label><input id="sheet-config-detail-app-script" value={draft.appScriptUrl} onChange={(event) => setDraft((current) => ({ ...current, appScriptUrl: event.target.value }))} placeholder="https://script.google.com/macros/s/.../exec" /></div>
-          </div>
-          <div className="step-item">
-            <strong>Token</strong>
-            <span>Store the API key/token needed by the Apps Script endpoint.</span>
-            <div className="field"><label htmlFor="sheet-config-detail-token">API key / token</label><input id="sheet-config-detail-token" type="password" value={draft.appScriptToken} onChange={(event) => setDraft((current) => ({ ...current, appScriptToken: event.target.value }))} placeholder="TOOL_API_TOKEN" /></div>
-          </div>
-          <div className="step-item">
-            <strong>Save Config</strong>
-            <span>Save changes to the repository or delete the currently selected config.</span>
-            <div className="action-row align-center">
-              <button className="button" type="button" onClick={() => void saveConfig()}>{selectedConfig ? 'Save changes' : 'Save config'}</button>
-              <button className="button secondary" type="button" onClick={() => void deleteConfig()} disabled={!selectedId}>Delete</button>
-            </div>
+          <div className="action-row">
+            {message ? <span className="badge">{message}</span> : null}
+            <button className="button" type="button" onClick={openCreateModal}>Add</button>
           </div>
         </div>
+        {configs.length === 0 ? (
+          <div className="empty-state compact-empty">
+            <h3>Chưa có config nào</h3>
+            <p>Bấm Add để tạo Google Sheet config đầu tiên.</p>
+          </div>
+        ) : (
+          <div className="sheet-config-table-wrap">
+            <table className="data-table sheet-config-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Config name</th>
+                  <th>Sheet name</th>
+                  <th>Google Sheet</th>
+                  <th>Apps Script</th>
+                  <th>Updated</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {configs.map((config, index) => (
+                  <tr key={config.id} className={selectedId === config.id ? 'selected-row' : ''}>
+                    <td>{index + 1}</td>
+                    <td><strong>{config.name || '(No name)'}</strong></td>
+                    <td>{config.sheetName || 'Default first sheet'}</td>
+                    <td><span className="table-ellipsis" title={config.sheetUrl}>{config.sheetUrl || 'No Google Sheet link'}</span></td>
+                    <td><span className="table-ellipsis" title={config.appScriptUrl}>{config.appScriptUrl || 'No Web App URL'}</span></td>
+                    <td>{config.updatedAt ? new Date(config.updatedAt).toLocaleString() : '—'}</td>
+                    <td>{selectedId === config.id ? <span className="status-badge running">Selected</span> : <span className="status-badge pending">Saved</span>}</td>
+                    <td>
+                      <div className="action-row">
+                        <button type="button" className="button secondary" onClick={(event) => { event.stopPropagation(); void openEditModal(config); }}>Edit</button>
+                        <button type="button" className="button secondary" onClick={() => void deleteConfigById(config.id)}>Delete</button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </section>
     </div>
+
+    {isCreateModalOpen ? (
+      <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="create-sheet-config-title" onClick={closeCreateModal}>
+        <section className="panel card create-profile-modal" onClick={(event) => event.stopPropagation()}>
+          <div className="section-toolbar align-start">
+            <div>
+              <h2 id="create-sheet-config-title" className="section-title">Add Google Sheet Config</h2>
+              <p className="section-subtitle">Create a reusable Google Sheet and Apps Script connection.</p>
+            </div>
+            <button type="button" className="icon-button" onClick={closeCreateModal} aria-label="Close add Google Sheet config form">×</button>
+          </div>
+
+          <div className="profile-auto-note">
+            <strong>New config</strong>
+            <span>This config is only saved after you click <b>Save config</b>. Cancelling will keep the current selected config unchanged.</span>
+          </div>
+
+          <div className="profile-form-section">
+            <div>
+              <h3>Connect Sheet</h3>
+              <p>Name this config and connect it to a Google Sheet URL and optional tab name.</p>
+            </div>
+            <div className="profile-form-grid">
+              <div className="field">
+                <label htmlFor="new-sheet-config-name">Config name</label>
+                <input id="new-sheet-config-name" value={createDraft.name} onChange={(event) => setCreateDraft((current) => ({ ...current, name: event.target.value }))} placeholder="VD: Main production sheet" autoFocus />
+              </div>
+              <div className="field profile-field-wide">
+                <label htmlFor="new-sheet-config-url">Google Sheet link</label>
+                <input id="new-sheet-config-url" value={createDraft.sheetUrl} onChange={(event) => setCreateDraft((current) => ({ ...current, sheetUrl: event.target.value }))} placeholder="https://docs.google.com/spreadsheets/d/..." />
+              </div>
+              <div className="field">
+                <label htmlFor="new-sheet-config-tab">Sheet name / tab name</label>
+                <input id="new-sheet-config-tab" value={createDraft.sheetName} onChange={(event) => setCreateDraft((current) => ({ ...current, sheetName: event.target.value }))} placeholder="VD: Tháng 8, Sheet1, Mùa Mưa" />
+              </div>
+            </div>
+          </div>
+
+          <div className="profile-form-section">
+            <div>
+              <h3>Apps Script</h3>
+              <p>Provide the Apps Script Web App endpoint and token for write-back/helper actions.</p>
+            </div>
+            <div className="profile-form-grid">
+              <div className="field profile-field-wide">
+                <label htmlFor="new-sheet-config-app-script">Apps Script Web App URL</label>
+                <input id="new-sheet-config-app-script" value={createDraft.appScriptUrl} onChange={(event) => setCreateDraft((current) => ({ ...current, appScriptUrl: event.target.value }))} placeholder="https://script.google.com/macros/s/.../exec" />
+              </div>
+              <div className="field profile-field-wide">
+                <label htmlFor="new-sheet-config-token">API key / token</label>
+                <input id="new-sheet-config-token" type="password" value={createDraft.appScriptToken} onChange={(event) => setCreateDraft((current) => ({ ...current, appScriptToken: event.target.value }))} placeholder="TOOL_API_TOKEN" />
+              </div>
+            </div>
+          </div>
+
+          {createMessage ? <div className="field-error">{createMessage}</div> : null}
+
+          <div className="modal-actions">
+            <button type="button" className="button secondary" onClick={closeCreateModal}>Cancel</button>
+            <button type="button" className="button" onClick={() => void saveCreateConfig()}>Save config</button>
+          </div>
+        </section>
+      </div>
+    ) : null}
+
+    {isEditModalOpen ? (
+      <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="edit-sheet-config-title" onClick={closeEditModal}>
+        <section className="panel card create-profile-modal" onClick={(event) => event.stopPropagation()}>
+          <div className="section-toolbar align-start">
+            <div>
+              <h2 id="edit-sheet-config-title" className="section-title">Edit Google Sheet Config</h2>
+              <p className="section-subtitle">Update the selected Google Sheet and Apps Script connection.</p>
+            </div>
+            <button type="button" className="icon-button" onClick={closeEditModal} aria-label="Close edit Google Sheet config form">×</button>
+          </div>
+
+          <div className="profile-auto-note">
+            <strong>Editing config</strong>
+            <span>Changes are only saved after you click <b>Save changes</b>. Cancelling keeps the existing config unchanged.</span>
+          </div>
+
+          <div className="profile-form-section">
+            <div>
+              <h3>Connect Sheet</h3>
+              <p>Edit the config name, Google Sheet URL, and optional tab name.</p>
+            </div>
+            <div className="profile-form-grid">
+              <div className="field">
+                <label htmlFor="edit-sheet-config-name">Config name</label>
+                <input id="edit-sheet-config-name" value={editDraft.name} onChange={(event) => setEditDraft((current) => ({ ...current, name: event.target.value }))} placeholder="VD: Main production sheet" autoFocus />
+              </div>
+              <div className="field profile-field-wide">
+                <label htmlFor="edit-sheet-config-url">Google Sheet link</label>
+                <input id="edit-sheet-config-url" value={editDraft.sheetUrl} onChange={(event) => setEditDraft((current) => ({ ...current, sheetUrl: event.target.value }))} placeholder="https://docs.google.com/spreadsheets/d/..." />
+              </div>
+              <div className="field">
+                <label htmlFor="edit-sheet-config-tab">Sheet name / tab name</label>
+                <input id="edit-sheet-config-tab" value={editDraft.sheetName} onChange={(event) => setEditDraft((current) => ({ ...current, sheetName: event.target.value }))} placeholder="VD: Tháng 8, Sheet1, Mùa Mưa" />
+              </div>
+            </div>
+          </div>
+
+          <div className="profile-form-section">
+            <div>
+              <h3>Apps Script</h3>
+              <p>Edit the Apps Script Web App endpoint and token for write-back/helper actions.</p>
+            </div>
+            <div className="profile-form-grid">
+              <div className="field profile-field-wide">
+                <label htmlFor="edit-sheet-config-app-script">Apps Script Web App URL</label>
+                <input id="edit-sheet-config-app-script" value={editDraft.appScriptUrl} onChange={(event) => setEditDraft((current) => ({ ...current, appScriptUrl: event.target.value }))} placeholder="https://script.google.com/macros/s/.../exec" />
+              </div>
+              <div className="field profile-field-wide">
+                <label htmlFor="edit-sheet-config-token">API key / token</label>
+                <input id="edit-sheet-config-token" type="password" value={editDraft.appScriptToken} onChange={(event) => setEditDraft((current) => ({ ...current, appScriptToken: event.target.value }))} placeholder="TOOL_API_TOKEN" />
+              </div>
+            </div>
+          </div>
+
+          {editMessage ? <div className="field-error">{editMessage}</div> : null}
+
+          <div className="modal-actions">
+            <button type="button" className="button secondary" onClick={closeEditModal}>Cancel</button>
+            <button type="button" className="button" onClick={() => void saveEditConfig()}>Save changes</button>
+          </div>
+        </section>
+      </div>
+    ) : null}
+    </>
   );
 }

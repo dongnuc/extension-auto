@@ -107,122 +107,135 @@ export function ProfileEditor({ profile, onChange, onSave }: ProfileEditorProps)
         </button>
       </div>
 
-      <div className="form-grid">
-        <div className="field">
-          <label htmlFor="profile-id">Profile ID</label>
-          <input id="profile-id" value={profile.id} onChange={(event) => setField('id', event.target.value)} />
-          {validation?.fields.id ? <div className="field-error">{validation.fields.id}</div> : null}
+      <div className="profile-form-section">
+        <div>
+          <h3>Basic information</h3>
+          <p>Name, Gemini URL, and availability for this automation profile.</p>
         </div>
-        <div className="field">
-          <label htmlFor="profile-name">Profile name</label>
-          <input id="profile-name" value={profile.name} onChange={(event) => setField('name', event.target.value)} />
-          {validation?.fields.name ? <div className="field-error">{validation.fields.name}</div> : null}
-        </div>
-        <div className="field">
-          <label htmlFor="profile-url">Base URL</label>
-          <input id="profile-url" value={profile.baseUrl} onChange={(event) => setField('baseUrl', event.target.value)} />
-          {validation?.fields.baseUrl ? <div className="field-error">{validation.fields.baseUrl}</div> : null}
-        </div>
-        <div className="field">
-          <label htmlFor="profile-gem-name">Expected Gem name</label>
-          <input
-            id="profile-gem-name"
-            value={profile.expectedGemName}
-            onChange={(event) => setField('expectedGemName', event.target.value)}
-          />
-        </div>
-      </div>
-
-      <div className="form-grid">
-        <div className="field">
-          <label htmlFor="profile-enabled">Availability</label>
-          <select
-            id="profile-enabled"
-            value={profile.enabled ? 'enabled' : 'disabled'}
-            onChange={(event) => setField('enabled', event.target.value === 'enabled')}
-          >
-            <option value="enabled">Enabled</option>
-            <option value="disabled">Disabled</option>
-          </select>
-        </div>
-        <div className="field">
-          <label htmlFor="profile-output">Output stage</label>
-          <select
-            id="profile-output"
-            value={profile.outputStageId}
-            onChange={(event) => setField('outputStageId', event.target.value)}
-          >
-            {profile.stages.map((stage) => (
-              <option key={stage.id} value={stage.id}>
-                {stage.name} ({stage.id})
-              </option>
-            ))}
-          </select>
-          {validation?.fields.outputStageId ? <div className="field-error">{validation.fields.outputStageId}</div> : null}
-        </div>
-        <div className="field">
-          <label htmlFor="profile-export-mode">Export mode</label>
-          <select
-            id="profile-export-mode"
-            value={profile.exportConfig.mode}
-            onChange={(event) =>
-              setField('exportConfig', {
-                ...profile.exportConfig,
-                mode: event.target.value as GemProfile['exportConfig']['mode'],
-              })
-            }
-          >
-            <option value="per_script">per_script</option>
-            <option value="combined">combined</option>
-            <option value="both">both</option>
-          </select>
-        </div>
-        <div className="field">
-          <label htmlFor="profile-filename-template">Filename template</label>
-          <input
-            id="profile-filename-template"
-            value={profile.exportConfig.filenameTemplate}
-            onChange={(event) =>
-              setField('exportConfig', {
-                ...profile.exportConfig,
-                filenameTemplate: event.target.value,
-              })
-            }
-          />
+        <div className="profile-form-grid">
+          <div className="field profile-field-wide">
+            <label htmlFor="profile-name">Profile name</label>
+            <input id="profile-name" value={profile.name} onChange={(event) => setField('name', event.target.value)} />
+            {validation?.fields.name ? <div className="field-error">{validation.fields.name}</div> : null}
+          </div>
+          <div className="field profile-field-wide">
+            <label htmlFor="profile-url">Base URL</label>
+            <input id="profile-url" value={profile.baseUrl} onChange={(event) => setField('baseUrl', event.target.value)} />
+            {validation?.fields.baseUrl ? <div className="field-error">{validation.fields.baseUrl}</div> : null}
+          </div>
+          <div className="field">
+            <label htmlFor="profile-gem-name">Expected Gem name</label>
+            <input
+              id="profile-gem-name"
+              value={profile.expectedGemName}
+              onChange={(event) => setField('expectedGemName', event.target.value)}
+            />
+          </div>
+          <div className="field">
+            <label htmlFor="profile-enabled">Availability</label>
+            <select
+              id="profile-enabled"
+              value={profile.enabled ? 'enabled' : 'disabled'}
+              onChange={(event) => setField('enabled', event.target.value === 'enabled')}
+            >
+              <option value="enabled">Enabled</option>
+              <option value="disabled">Disabled</option>
+            </select>
+          </div>
         </div>
       </div>
 
-      <div className="form-grid">
-        <div className="field">
-          <label htmlFor="profile-max-retries">Profile retry count</label>
-          <input
-            id="profile-max-retries"
-            min={0}
-            type="number"
-            value={profile.errorPolicy.maxProfileRetries}
-            onChange={(event) =>
-              setField('errorPolicy', {
-                ...profile.errorPolicy,
-                maxProfileRetries: Number(event.target.value),
-              })
-            }
-          />
+      <div className="profile-form-section">
+        <div>
+          <h3>Output & export</h3>
+          <p>Choose the output stage and how generated files should be exported.</p>
         </div>
-        <div className="field">
-          <label htmlFor="profile-continue-on-error">On stage failure</label>
-          <select
-            id="profile-continue-on-error"
-            value={profile.errorPolicy.continueOnStageFailure ? 'continue' : 'stop'}
-            onChange={(event) =>
-              setField('errorPolicy', {
-                ...profile.errorPolicy,
-                continueOnStageFailure: event.target.value === 'continue',
-              })
-            }
-          >
-            <option value="stop">Stop run</option>
-            <option value="continue">Continue run</option>
-          </select>
+        <div className="profile-form-grid">
+          <div className="field">
+            <label htmlFor="profile-output">Output stage</label>
+            <select
+              id="profile-output"
+              value={profile.outputStageId}
+              onChange={(event) => setField('outputStageId', event.target.value)}
+            >
+              {profile.stages.map((stage) => (
+                <option key={stage.id} value={stage.id}>
+                  {stage.name}
+                </option>
+              ))}
+            </select>
+            {validation?.fields.outputStageId ? <div className="field-error">{validation.fields.outputStageId}</div> : null}
+          </div>
+          <div className="field">
+            <label htmlFor="profile-export-mode">Export mode</label>
+            <select
+              id="profile-export-mode"
+              value={profile.exportConfig.mode}
+              onChange={(event) =>
+                setField('exportConfig', {
+                  ...profile.exportConfig,
+                  mode: event.target.value as GemProfile['exportConfig']['mode'],
+                })
+              }
+            >
+              <option value="per_script">per_script</option>
+              <option value="combined">combined</option>
+              <option value="both">both</option>
+            </select>
+          </div>
+          <div className="field profile-field-wide">
+            <label htmlFor="profile-filename-template">Filename template</label>
+            <input
+              id="profile-filename-template"
+              value={profile.exportConfig.filenameTemplate}
+              onChange={(event) =>
+                setField('exportConfig', {
+                  ...profile.exportConfig,
+                  filenameTemplate: event.target.value,
+                })
+              }
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className="profile-form-section">
+        <div>
+          <h3>Error policy</h3>
+          <p>Control retry behavior when a profile or stage fails.</p>
+        </div>
+        <div className="profile-form-grid profile-form-grid-compact">
+          <div className="field">
+            <label htmlFor="profile-max-retries">Profile retry count</label>
+            <input
+              id="profile-max-retries"
+              min={0}
+              type="number"
+              value={profile.errorPolicy.maxProfileRetries}
+              onChange={(event) =>
+                setField('errorPolicy', {
+                  ...profile.errorPolicy,
+                  maxProfileRetries: Number(event.target.value),
+                })
+              }
+            />
+          </div>
+          <div className="field">
+            <label htmlFor="profile-continue-on-error">On stage failure</label>
+            <select
+              id="profile-continue-on-error"
+              value={profile.errorPolicy.continueOnStageFailure ? 'continue' : 'stop'}
+              onChange={(event) =>
+                setField('errorPolicy', {
+                  ...profile.errorPolicy,
+                  continueOnStageFailure: event.target.value === 'continue',
+                })
+              }
+            >
+              <option value="stop">Stop run</option>
+              <option value="continue">Continue run</option>
+            </select>
+          </div>
         </div>
       </div>
 
